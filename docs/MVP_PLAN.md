@@ -40,10 +40,10 @@ The project spec now explicitly resolves these mismatches:
 
 | Feature spec | Owns | Readiness |
 | --- | --- | --- |
-| [Context graph foundation](specs/context-graph-foundation.md) | Minimal runtime/test setup, relational store, provenance, authority, node history, stable service contracts | Implementation-ready specification; not implemented |
-| [Prepared project ingestion](specs/prepared-project-ingestion.md) | One validated manifest, deterministic import and demo data | Scoped draft; expand before implementation |
-| [Graph workbench](specs/graph-workbench.md) | Graph/detail UI, manual authoring/review, revision comparison, final task/copy UI | Scoped draft; expand before implementation |
-| [Task context compiler](specs/task-context-compiler.md) | Semantic seeds, graph expansion, ranking, budget packing, explanations, JSON API | Scoped draft; expand before implementation |
+| [Context graph foundation](specs/context-graph-foundation.md) | Minimal runtime/test setup, relational store, provenance, authority, node history, stable service contracts | Implemented and verified |
+| [Prepared project ingestion](specs/prepared-project-ingestion.md) | One validated manifest, deterministic import and demo data | Implemented and verified |
+| [Graph workbench](specs/graph-workbench.md) | Graph/detail UI, manual authoring/review, revision comparison, final task/copy UI | Implemented; automated/API checks pass, browser walkthrough pending |
+| [Task context compiler](specs/task-context-compiler.md) | Semantic seeds, graph expansion, ranking, budget packing, explanations, JSON API | Implemented; local provider verified, hosted provider unexercised |
 
 Retrieval, compression, and explainability share candidate and output contracts,
 so they form one feature. History belongs in storage from its first write, with
@@ -110,9 +110,9 @@ measured; label synthetic data and measured versus estimated metrics explicitly.
 
 - Single trusted local operator; no public deployment or authentication. Actor
   labels are attribution, not identity verification.
-- PostgreSQL 17, TypeScript/Node, direct `pg`, npm, Vitest, and later Next.js/React.
-  No database service or credentials were verified during kickoff. Foundation
-  implementation must validate startup, migration, tests, and persistence.
+- PostgreSQL 17, TypeScript/Node, direct `pg`, npm, Vitest, and Next.js/React.
+  Startup, migrations, persistence, and integration tests have been verified
+  against the local PostgreSQL service.
 - At most 1,000 nodes and 5,000 edges per project. No paging/search cluster/vector
   database is required. Larger inputs receive explicit errors.
 - Sources and node revisions are immutable. Edges are immutable additions;
@@ -120,21 +120,21 @@ measured; label synthetic data and measured versus estimated metrics explicitly.
   deferred. Archive a node to exclude it and incident edges from the active graph.
 - Prepared manifest import is intentionally narrower than arbitrary GitHub/local
   scanning. It must not execute code, fetch remote evidence, or invent claims.
-- Before ingestion implementation: freeze manifest fields, identity mapping,
-  bounds, and the exact fixture. A stable manifest project ID makes repeat imports
-  an explicit conflict; the importer never overwrites a populated project.
-- Before workbench implementation: freeze route payloads from store DTOs, simple
-  wireframe/rendering choice, and manual acceptance steps. No design system project.
-- Before compiler implementation: select one hosted embedding provider/model,
-  credentials, tokenizer, cache schema, concrete scoring/packing rules, and
-  evaluation thresholds. Use only prepared public/synthetic context. Network,
-  provider availability, and semantic quality are open integration risks. Explicit
-  degraded lexical retrieval may aid debugging but cannot pass the MVP semantic gate.
+- Ingestion freezes manifest fields, identity mapping, bounds, and the exact fixture.
+  A stable manifest project ID makes repeat imports an explicit conflict; the
+  importer never overwrites a populated project.
+- Workbench route payloads, SVG rendering, and manual acceptance steps are frozen.
+  The final browser walkthrough remains open because no browser was connected in
+  the verification environment.
+- The compiler defaults to the local `Xenova/all-MiniLM-L6-v2` semantic provider
+  and supports optional hosted OpenAI embeddings. `cl100k_base`, cache schema,
+  scoring/packing rules, and evaluation thresholds are frozen and tested. The local
+  semantic gate passes; the hosted adapter lacks a credential-backed smoke run.
 - Package versions and native/runtime compatibility must be verified and locked
   at implementation. Documentation does not claim dependencies have been tested.
 
-These later-feature gates are explicit scope work for their next sessions. The
-foundation has no dependency on choosing a graph UI library or an embedding vendor.
+No implementation gate remains. Browser UX verification and the optional hosted
+provider smoke are the outstanding environment-dependent checks.
 
 ## Kickoff verification and final review
 
@@ -154,10 +154,10 @@ feature specs and found no need for additional infrastructure. Corrections made:
 - Align legacy project-spec examples with MVP edge types, representations, and
   Project-as-scope semantics.
 
-All foundation acceptance criteria map to concrete verification (A1–A12); later
-feature criteria also map to tests or manual checks. All implementation items
-remain unchecked. The three downstream specs explicitly list decisions to finish
-before implementation; those gates do not block the foundation.
+All feature acceptance criteria map to automated tests or named manual checks.
+Foundation and ingestion are complete; compiler behavior and its local semantic
+provider are verified. The workbench's API-level demo is verified, while its visual
+and clipboard behavior remains assigned to the browser checklist in its feature spec.
 
 Documentation checks cover the template's 18 sections in every feature spec,
 balanced code fences, resolving local Markdown links, whitespace errors, unchanged

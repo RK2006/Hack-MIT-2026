@@ -5,10 +5,11 @@ Owner: Project team
 Development model: Spec-driven
 Last reconciled: 2026-09-19
 
-Repository inspection found only planning documents, with no application, schema,
-dependencies, or tests. The architecture below is a selected plan, not existing
-software. See [MVP plan](MVP_PLAN.md) for repository evidence, dependencies, and
-the kickoff review. Feature contracts live in [specs/](specs/).
+The kickoff repository contained only planning documents. The selected architecture
+has since been implemented as a Next.js/TypeScript application backed by PostgreSQL,
+with prepared-project ingestion, a graph workbench, and an explainable task-context
+compiler. See [MVP plan](MVP_PLAN.md) for the original repository evidence and the
+current build status. Feature contracts and verification state live in [specs/](specs/).
 
 ---
 
@@ -673,16 +674,17 @@ For the hackathon, prefer the smallest architecture that proves the idea.
 
 ---
 
-## 16. Decisions and remaining implementation gates
+## 16. Decisions and remaining verification gates
 
 Resolved at kickoff: seven node types, eight edge types, File as a node, Project
 and Source as separate records, prepared-example ingestion, manual summaries,
 two authority values, immutable node snapshots, current-only retrieval, and
 JSON/copy agent handoff. No branch model, OAuth, or automatic stale detection.
 
-Later specs are deliberately scoped drafts. Before their implementation, finish
-the manifest schema/fixture, workbench wireframe and graph rendering choice,
-and the compiler's embedding provider/model, tokenizer, scoring constants, and
-evaluation fixture. These are explicit gates in [the MVP plan](MVP_PLAN.md), not
-decisions left to the foundation implementer. Provider access and PostgreSQL
-runtime availability have not been verified by this documentation-only kickoff.
+The manifest schema/fixture, workbench renderer and route contracts, compiler
+provider/model, tokenizer, scoring constants, and evaluation fixture are frozen in
+their feature specs and implemented. PostgreSQL integration, the local semantic
+provider, automated checks, production build, and live JSON compile route have been
+verified. The remaining MVP acceptance gate is the workbench's browser walkthrough;
+the optional hosted OpenAI provider also remains unexercised because no credential
+is available.

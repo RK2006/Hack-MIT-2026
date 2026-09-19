@@ -380,7 +380,9 @@ category, stage durations, and counts only.
       no matches, provider failure, and partial coverage are explicit.
 - [x] A6: Editing a node changes the retrieved current version and cache key without
       altering old history; an in-flight snapshot stays internally consistent.
-- [x] A7: JSON route and copied context match the bundle contract and satisfy the integrated workbench demo.
+- [ ] A7: JSON route and copied context match the bundle contract and satisfy the integrated workbench demo.
+      The JSON route is verified; browser rendering and clipboard equivalence remain
+      in the workbench manual checklist.
 
 ## 15. Test plan
 
@@ -419,7 +421,8 @@ category, stage durations, and counts only.
 - [x] Migration 002, `EMBEDDING_UNAVAILABLE`, provider interface with local/openai/fixed adapters, cache module; verify cache keying (A6).
 - [x] Retrieval (similarity, seeds, expansion, ranking, reasons); verify A1/A2/A4/A5 with fixed fixtures.
 - [x] Tokenizer, rendering, packing; verify A3 and budget omissions.
-- [x] `compileContext`, JSON route, semantic smoke script; verify A7 and real-provider A1 (local backend).
+- [~] `compileContext`, JSON route, semantic smoke script; JSON route and real-provider
+      A1 pass, while the copied-context portion of A7 awaits browser verification.
 - [x] Run tests/typecheck/lint/format/build; record model/tokenizer/observations in §18; commit/push.
 
 ## 17. Alternatives considered
@@ -461,12 +464,16 @@ Observed on 2026-09-19 with `local:Xenova/all-MiniLM-L6-v2` (quantized ONNX via
 host where the newer `@huggingface/transformers` native binding does not load):
 `npm run semantic:smoke` for "Fix duplicate Stripe webhook processing" at budget
 4,096 selected all seven `EXPECTED_RELEVANT_KEYS` and none of the five
-distractors; the paraphrased inferred bug scored similarity 0.38, the in-memory
-assumption 0.40, and the receipt store (no task keywords) entered through
+distractors; the paraphrased inferred bug scored similarity 0.40, the in-memory
+assumption 0.38, and the receipt store (no task keywords) entered through
 `DEPENDS_ON` with relevance 0.9. Measured sizes: selected context 1,610 tokens
-versus 2,355 tokens for all active demo nodes rendered in full (the demo fixture
+versus 2,355 tokens for all active demo nodes rendered in full (the original
+acceptance run). A repeat verification after integration measured 1,479 selected
+tokens versus 2,217 project-context tokens; the demo fixture
 is small; do not claim larger totals). First local-model load takes ~15 s
-(one-time download); later compiles take well under one second. The hosted
+(one-time download under typical conditions); a cold download can exceed the
+documented 30 s provider timeout and return `EMBEDDING_UNAVAILABLE`, after which a
+cached run completes in about one second. The hosted
 OpenAI adapter is implemented but was not exercised because no credential was
 available. Relative imports in `src/` are extensionless because Turbopack cannot
 resolve `.js`-suffixed imports to `.ts` sources.

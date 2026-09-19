@@ -203,8 +203,10 @@ selection reasons. No source text or secrets in request logs.
 - [x] A2: Manual create/edit/review/archive/restore persist correctly; a stale edit
       displays a conflict without overwriting, and archived history remains reachable.
 - [x] A3: Comparing two revisions shows changed content, authority, source, and reason while leaving current state unchanged.
-- [x] A4: Task controls display the compiler selection, paths, token count, omissions,
+- [ ] A4: Task controls display the compiler selection, paths, token count, omissions,
       and exact copyable text; invalid/unavailable/degraded/empty states are clear.
+      Route/contract behavior is automated; visual rendering and clipboard behavior
+      remain part of the browser checklist.
 - [ ] A5: The complete demo in the MVP plan succeeds, including a history change and subsequent current-context retrieval.
 
 ## 15. Test plan
@@ -250,7 +252,8 @@ selection reasons. No source text or secrets in request logs.
 - [x] Freeze renderer, route payloads, archived-list reader, conflict behavior, and browser acceptance steps (this document).
 - [x] Add `listArchivedNodes`, runtime store, HTTP helpers, read routes, project list page, graph/list/detail/evidence; verify A1.
 - [x] Add manual create/edit/review/archive/restore routes + forms and two-revision comparison; verify A2/A3.
-- [x] Integrate task panel against `ContextBundle`; verify A4 (route/contract automated; panel rendering by manual checklist).
+- [~] Integrate task panel against `ContextBundle`; route/contract verification passes,
+      but A4 panel rendering and clipboard verification remain in the browser checklist.
 - [~] Execute the manual demo checklist (A5): API-level run of steps 1–7 verified over HTTP on 2026-09-19; browser walkthrough is the operator's final check. All automated checks pass; durable context updated; committed.
 
 ## 17. Alternatives considered
