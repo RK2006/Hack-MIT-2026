@@ -44,6 +44,41 @@ To use OpenAI instead, set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY`
    review it as canonical, then open History and compare v1 with v2.
 5. Recompile: the bundle now cites v2 (canonical); v1 remains readable in History.
 
+## Agent handoff (MCP)
+
+Expose the compiler to a coding agent over stdio MCP:
+
+```bash
+npm run mcp     # tools: list_projects, compile_context, get_node, get_source (+ propose_context with ANTHROPIC_API_KEY)
+```
+
+Client configuration (Claude Code / Codex style):
+
+```json
+{
+  "mcpServers": {
+    "context-graph": {
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp-server.ts"],
+      "cwd": "/path/to/hackmit-2026",
+      "env": { "DATABASE_URL": "postgresql://context_graph:context_graph_local@127.0.0.1:5432/context_graph" }
+    }
+  }
+}
+```
+
+## Agent proposals
+
+With `ANTHROPIC_API_KEY` set (optional `ANTHROPIC_MODEL`, default `claude-sonnet-4-5`),
+an agent or operator can turn notes/diff summaries into *inferred* knowledge for review:
+
+```bash
+npm run propose -- 7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101 notes.md --task "Fix duplicate Stripe webhook processing"
+```
+
+Proposals appear in the workbench with the inferred badge and agent evidence; review them
+canonical or archive them. Agents can never write canonical knowledge.
+
 ## Verification
 
 ```bash

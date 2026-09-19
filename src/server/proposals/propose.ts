@@ -1,0 +1,205 @@
+import { randomUUID } from 'node:crypto';
+import { GraphError, graphError } from '../context/errors';
+import type { EdgeType, GraphStore, NodeType } from '../context/types';
+import type { ProposalModel } from './model';
+import { buildProposalPrompt, parseModelProposal, PROPOSAL_LIMITS } from './prompt';
+
+export type { ProposalModel } from './model';
+
+export type ProposalRequest = { text: string; taskHint?: string | undefined };
+
+export type ProposalResult = {
+  projectId: string;
+  model: string;
+  sourceId: string | null;
+  created: {
+    nodes: Array<{ nodeId: string; externalKey: string; type: NodeType; title: string }>;
+    edges: Array<{ edgeId: string; from: string; to: string; type: EdgeType }>;
+  };
+  dropped: Array<{ kind: 'node' | 'edge'; reason: string; ref: string }>;
+};
+
+export type ProposalDeps = {
+  store: GraphStore;
+  model: ProposalModel;
+  log?: (event: {
+    operation: 'proposeContext';
+    model: string;
+    durationMs: number;
+    created: number;
+    dropped: number;
+  }) => void;
+};
+
+const codePoints = (text: string) => Array.from(text).length;
+
+/**
+ * One model call → validated proposal → one transaction writing inferred nodes/edges with an
+ * agent source. Nothing here can create or modify canonical knowledge (enforced by the store).
+ */
+export async function proposeContext(
+  deps: ProposalDeps,
+  projectId: string,
+  request: ProposalRequest,
+): Promise<ProposalResult> {
+  const started = Date.now();
+  const text = request.text ?? '';
+  if (
+    typeof text !== 'string' ||
+    codePoints(text.trim()) < 1 ||
+    codePoints(text) > PROPOSAL_LIMITS.textMax
+  ) {
+    throw graphError('VALIDATION_ERROR', `text must be 1..${PROPOSAL_LIMITS.textMax} characters`, {
+      field: 'text',
+    });
+  }
+  if (request.taskHint !== undefined && codePoints(request.taskHint) > 500) {
+    throw graphError('VALIDATION_ERROR', 'taskHint must be at most 500 characters', {
+      field: 'taskHint',
+    });
+  }
+  const graph = await deps.store.getGraph(projectId);
+  const raw = await deps.model.complete(
+    buildProposalPrompt(graph, {
+      text,
+      ...(request.taskHint !== undefined && { taskHint: request.taskHint }),
+    }),
+  );
+  const proposal = parseModelProposal(raw);
+  const dropped: ProposalResult['dropped'] = [];
+  const empty: ProposalResult = {
+    projectId,
+    model: deps.model.id,
+    sourceId: null,
+    created: { nodes: [], edges: [] },
+    dropped,
+  };
+  if (proposal.nodes.length === 0) {
+    for (const edge of proposal.edges)
+      dropped.push({
+        kind: 'edge',
+        reason: 'no proposed nodes',
+        ref: `${edge.fromKey}->${edge.toKey}`,
+      });
+    deps.log?.({
+      operation: 'proposeContext',
+      model: deps.model.id,
+      durationMs: Date.now() - started,
+      created: 0,
+      dropped: dropped.length,
+    });
+    return empty;
+  }
+
+  const existingByKey = new Map(
+    graph.nodes.filter((node) => node.externalKey).map((node) => [node.externalKey!, node.id]),
+  );
+  const actor = { kind: 'agent' as const, label: deps.model.id.slice(0, 120) };
+  const excerpt = `[${deps.model.id}] ${Array.from(text).slice(0, PROPOSAL_LIMITS.excerptMax).join('')}`;
+
+  const result = await deps.store.transaction(async (tx) => {
+    const source = await tx.createSource(projectId, {
+      kind: 'agent',
+      uri: `agent://proposals/${randomUUID()}`,
+      label: `Agent proposal (${deps.model.id})`.slice(0, 200),
+      excerpt,
+      revisionRef: null,
+    });
+    const created: ProposalResult['created'] = { nodes: [], edges: [] };
+    const proposedIds = new Map<string, string>();
+    for (const node of proposal.nodes) {
+      const externalKey = `agent.${node.key}-${randomUUID().slice(0, 8)}`;
+      const createdNode = await tx.createNode(projectId, {
+        type: node.type,
+        externalKey,
+        title: node.title,
+        content: node.content,
+        summary: node.summary,
+        authority: 'inferred',
+        importance: node.importance,
+        confidence: Math.min(node.confidence, PROPOSAL_LIMITS.maxConfidence),
+        sourceId: source.id,
+        actor,
+        changeReason: request.taskHint
+          ? `Proposed by agent after: ${request.taskHint}`.slice(0, 500)
+          : 'Proposed by agent from supplied notes',
+      });
+      proposedIds.set(node.key, createdNode.id);
+      created.nodes.push({
+        nodeId: createdNode.id,
+        externalKey,
+        type: node.type,
+        title: node.title,
+      });
+    }
+    const seen = new Set<string>();
+    for (const edge of proposal.edges) {
+      const ref = `${edge.fromKey} ${edge.type} ${edge.toKey}`;
+      const from = proposedIds.get(edge.fromKey) ?? existingByKey.get(edge.fromKey);
+      const to = proposedIds.get(edge.toKey) ?? existingByKey.get(edge.toKey);
+      if (!from || !to) {
+        dropped.push({ kind: 'edge', reason: 'unresolved endpoint key', ref });
+        continue;
+      }
+      if (from === to) {
+        dropped.push({ kind: 'edge', reason: 'self edge', ref });
+        continue;
+      }
+      if (!proposedIds.has(edge.fromKey) && !proposedIds.has(edge.toKey)) {
+        dropped.push({ kind: 'edge', reason: 'edge must touch a proposed node', ref });
+        continue;
+      }
+      const identity = `${from}\0${to}\0${edge.type}`;
+      if (seen.has(identity)) {
+        dropped.push({ kind: 'edge', reason: 'duplicate edge', ref });
+        continue;
+      }
+      seen.add(identity);
+      try {
+        // Edge validation happens through the store; a rejected edge is reported, not fatal.
+        // The store's transaction marks itself failed on any error, so validate up front instead.
+        if (
+          graph.edges.some(
+            (e) => e.fromNodeId === from && e.toNodeId === to && e.type === edge.type,
+          )
+        ) {
+          dropped.push({ kind: 'edge', reason: 'edge already exists', ref });
+          continue;
+        }
+        const createdEdge = await tx.createEdge(projectId, {
+          fromNodeId: from,
+          toNodeId: to,
+          type: edge.type,
+          authority: 'inferred',
+          sourceId: source.id,
+          actor,
+        });
+        created.edges.push({
+          edgeId: createdEdge.id,
+          from: edge.fromKey,
+          to: edge.toKey,
+          type: edge.type,
+        });
+      } catch (error) {
+        if (error instanceof GraphError) throw error;
+        throw graphError('STORAGE_ERROR', 'Proposal write failed');
+      }
+    }
+    return { sourceId: source.id, created };
+  });
+
+  deps.log?.({
+    operation: 'proposeContext',
+    model: deps.model.id,
+    durationMs: Date.now() - started,
+    created: result.created.nodes.length + result.created.edges.length,
+    dropped: dropped.length,
+  });
+  return {
+    projectId,
+    model: deps.model.id,
+    sourceId: result.sourceId,
+    created: result.created,
+    dropped,
+  };
+}
