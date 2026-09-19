@@ -1,8 +1,14 @@
 # Project Spec — Context Graph
 
-Status: Draft / MVP
+Status: MVP scope reconciled; implementation not started
 Owner: Project team
 Development model: Spec-driven
+Last reconciled: 2026-09-19
+
+Repository inspection found only planning documents, with no application, schema,
+dependencies, or tests. The architecture below is a selected plan, not existing
+software. See [MVP plan](MVP_PLAN.md) for repository evidence, dependencies, and
+the kickoff review. Feature contracts live in [specs/](specs/).
 
 ---
 
@@ -70,7 +76,7 @@ Project knowledge is represented as a graph.
 
 Each node represents a meaningful unit of context.
 
-Initial node types:
+Longer-term vocabulary (not all implemented in the MVP):
 
 - Project
 - Component
@@ -87,7 +93,7 @@ Initial node types:
 - Source
 - Person
 
-Initial relationship types:
+Longer-term relationship vocabulary:
 
 - CONTAINS
 - DEPENDS_ON
@@ -103,7 +109,12 @@ Initial relationship types:
 - DISCUSSED_IN
 - OWNED_BY
 
-The schema should remain extensible.
+The MVP uses only Component, File, Decision, Constraint, Assumption, Discovery,
+and Bug nodes. Project is a scope record; Source is a separate evidence record,
+not a graph node. MVP edges are CONTAINS, DEPENDS_ON, IMPLEMENTS, REQUIRES,
+CONSTRAINS, AFFECTS, CAUSED_BY, and RELATED_TO. Their directions and stored
+lowercase node names are defined in [the foundation spec](specs/context-graph-foundation.md).
+New types require an explicit migration and spec change, not an ontology framework.
 
 ### 4.2 Provenance
 
@@ -144,6 +155,11 @@ Minimum MVP versioning:
 - changed context can be compared
 - provenance for each revision is stored
 
+The MVP stores immutable full snapshots of every node revision, including
+inferred nodes. It compares two node revisions; it does not reconstruct a past
+whole graph. Edges are immutable additions with provenance and authority;
+relationship editing, removal, and graph-wide history are deferred.
+
 ### 4.4 Context checkout
 
 A user or agent provides a task such as:
@@ -162,7 +178,7 @@ Inputs:
 
 - task description
 - optional starting component/file
-- optional branch/version
+- optional branch/version (future; MVP reads current revisions only)
 - token budget
 - optional depth
 
@@ -225,13 +241,13 @@ Wants important architectural context and decisions to remain durable and review
 
 ### Flow A — Connect a repository
 
-1. User selects/connects a GitHub repository.
-2. System ingests basic repository structure.
-3. System identifies components/files.
-4. System creates initial graph nodes and relationships.
-5. User can inspect the generated graph.
+1. Operator imports the supplied, labeled prepared example manifest.
+2. System validates its file paths, component definitions, and curated claims.
+3. System creates a persisted project graph with source provenance.
+4. User opens the project and inspects the graph.
 
-MVP may support a local repository import if GitHub OAuth is too expensive for hackathon time.
+The prepared project satisfies the MVP ingestion requirement. Arbitrary local
+repository scanning, GitHub authentication, and issue/PR ingestion are deferred.
 
 ### Flow B — Add project context
 
@@ -243,7 +259,9 @@ Context enters through one of:
 - agent-proposed context
 - optional chat integration
 
-For MVP, support repository analysis + manual context first.
+For MVP, support a prepared repository manifest + manual context first. Derive
+file/component structure deterministically from that manifest; do not claim
+automatic architectural understanding or arbitrary repository analysis.
 
 ### Flow C — Explore graph
 
@@ -295,7 +313,8 @@ After implementation:
 3. user reviews proposal
 4. accepted changes become a new context revision
 
-MVP may demo this manually or with a simplified proposal flow.
+MVP uses a manual edit/review that creates a revision, followed by a before/after
+comparison. Automated code analysis and agent proposal orchestration are deferred.
 
 ---
 
@@ -338,21 +357,24 @@ The hackathon MVP should demonstrate one complete loop extremely well.
 #### Explainability
 - show why major nodes were included
 
+#### Semantic matching
+- use embedding similarity as well as graph relationships and explicit references
+- a lexical-only degraded response does not satisfy the successful MVP demo
+
+#### Context changes
+- preserve immutable node revision snapshots and their provenance
+- allow a human to edit/review context and compare two revisions
+- keep inferred claims distinguishable from canonical knowledge
+
 Example:
 
 > Idempotency was included because Retry System DEPENDS_ON Webhook Processing, which REQUIRES Idempotency.
 
-### Strongly desired
-
-- embeddings for semantic matching
-- context revision history
-- context diff
-- LLM-generated candidate nodes/edges
-- simple GitHub integration
-- MCP endpoint
-
 ### Stretch
 
+- LLM-generated candidate nodes/edges
+- arbitrary repository scanning and GitHub integration
+- MCP endpoint
 - Slack/Discord ingestion
 - automatic branch-specific context
 - context PRs
@@ -381,101 +403,45 @@ The demo matters more than infrastructure completeness.
 
 ---
 
-## 9. Proposed MVP architecture
+## 9. Selected MVP architecture
 
-The implementation may change this if the feature specs justify it.
+No implementation stack existed at kickoff. These are new decisions that retain
+the original spec's Next.js/React and PostgreSQL direction.
 
-### Frontend
+- One TypeScript application, Node.js runtime, npm and a committed lockfile.
+- Next.js App Router + React for the workbench and same-origin route handlers.
+- A server-only graph store using `pg` and parameterized SQL; no separate API
+  service, ORM, graph database, or job queue.
+- PostgreSQL 17 for local development/test/demo, configured by `DATABASE_URL`.
+  A small local container configuration belongs to foundation implementation.
+- Five product tables: `projects`, `context_sources`, `context_nodes`,
+  `context_revisions`, and `context_edges`. Sources and revisions are immutable;
+  node identity is separate from revision content. See the exact schema in
+  [the foundation spec](specs/context-graph-foundation.md).
+- Application-level traversal of a bounded project graph. Up to 1,000 nodes and
+  5,000 edges per project; oversized imports fail explicitly.
+- One configured hosted embedding backend for semantic matching, with a small
+  revision-keyed cache and cosine scoring in application code. Provider/model
+  and tokenizer are selected in the task-context spec before its implementation.
+  No pgvector dependency is needed at this graph size.
+- Vitest for domain and real-PostgreSQL integration tests; TypeScript checking,
+  ESLint, formatting, and later a Next.js build check.
 
-Possible:
-- Next.js / React
+Foundation implementation creates only the package/database/test scaffold and
+graph store. The workbench adds Next.js when it has a consumer for the store.
+Exact compatible package versions are pinned and verified during implementation;
+no packages were installed during kickoff.
 
-Responsibilities:
-- project selection
-- graph visualization
-- node detail panel
-- task input
-- context bundle display
-- token-budget controls
-- context-diff display
+The demo runs locally under one trusted operator, bound to loopback. There is no
+authentication, user-account system, or public deployment in the MVP. Actor labels
+record provenance, not authenticated identity. Public hosting needs a separate
+access-control decision. Credentials stay server-side. Only the prepared public
+or synthetic context is sent to an embedding provider.
 
-### Backend/API
-
-Possible:
-- Next.js API routes or lightweight separate API
-
-Responsibilities:
-- ingestion
-- node/edge CRUD
-- retrieval
-- ranking
-- context compilation
-- LLM calls
-- version creation
-
-### Database
-
-Preferred hackathon approach:
-
-PostgreSQL
-
-Tables conceptually:
-
-#### context_nodes
-
-- id
-- project_id
-- type
-- title
-- content
-- summary
-- importance
-- confidence
-- authority
-- created_at
-- updated_at
-
-#### context_edges
-
-- id
-- project_id
-- from_node_id
-- to_node_id
-- relationship_type
-- weight
-- metadata
-
-#### context_sources
-
-- id
-- node_id
-- source_type
-- source_uri
-- source_metadata
-
-#### context_revisions
-
-- id
-- node_id
-- previous_revision_id
-- content
-- change_reason
-- created_by
-- created_at
-
-#### embeddings
-
-Use pgvector if convenient.
-
-Embedding may be stored directly on nodes instead of a separate table.
-
-### Graph implementation
-
-For MVP, do not require Neo4j.
-
-Use relational node/edge tables unless graph-specific functionality becomes necessary.
-
-Graph traversal can be performed in application code or recursive SQL.
+The compiler returns current node revision IDs, typed graph paths, selection
+reasons, omissions, and bounded rendered text. The workbench highlights that
+selection and supplies copyable text. JSON API + copy handoff fulfill the agent
+interface requirement; MCP is stretch.
 
 ---
 
@@ -507,18 +473,17 @@ High priority:
 
 Medium:
 - AFFECTS
-- RESOLVES
-- SUPERSEDES
+- CAUSED_BY
 
 Lower:
 - RELATED_TO
-- DISCUSSED_IN
+- CONTAINS
 
 Depth should be configurable.
 
 ### Stage 3 — Candidate scoring
 
-Initial conceptual score:
+Conceptual candidate signals (not a finalized formula):
 
 relevance
 × relationship importance
@@ -528,7 +493,12 @@ relevance
 
 Token cost should be considered when selecting the final bundle.
 
-Exact scoring does not need to be mathematically sophisticated for MVP.
+Exact scoring does not need to be mathematically sophisticated for MVP. Among
+relevant candidates, canonical context takes precedence over inferred context;
+unrelated canonical nodes must not displace relevant inferred candidates merely
+because of authority. The compiler spec fixes eligibility, ordering, and tests
+before implementation. Inferred edges remain labeled even when both endpoints
+are canonical.
 
 ### Stage 4 — Context compression
 
@@ -537,7 +507,9 @@ Nodes may have multiple representations:
 - title only
 - short summary
 - detailed context
-- raw evidence
+
+Raw evidence is inspected separately. The compiler includes its source reference,
+not a separate unbounded raw-evidence representation.
 
 Choose representation based on:
 - relevance
@@ -546,6 +518,12 @@ Choose representation based on:
 ### Stage 5 — Packing
 
 Fit the most useful information into the budget.
+
+Count the entire rendered context text, including its headings, provenance,
+authority labels, and explanations, with the configured tokenizer. The task and
+the consuming agent's other messages are outside this context-only budget. Report
+when important eligible context could not fit. Preserve claims using stored
+content/summary/title representations; generative rewriting is outside the MVP.
 
 Prioritize:
 1. critical constraints
@@ -577,22 +555,15 @@ The UI should allow a user to inspect these explanations.
 
 ## 12. Canonical vs inferred context
 
-Each context node should have an authority/state field.
+MVP nodes and edges have exactly two authority values: `canonical` and `inferred`.
+Canonical means reviewed by the operator, or a deterministic file/component fact
+from the importer. Agent-generated claims and relationships start inferred.
+Only a human review can promote a claim; agents cannot replace canonical content.
 
-Possible states:
-
-- canonical
-- reviewed
-- inferred
-- proposed
-- stale
-
-Recommended MVP behavior:
-
-- repository structure may be automatically canonical
-- LLM-extracted architectural claims begin as inferred/proposed
-- human approval can promote them
-- retrieval scoring favors reviewed/canonical knowledge
+Nodes have a separate `archived` flag in their revision snapshot. Archived nodes
+remain in history but do not enter current graph traversal. Automatic staleness
+detection is deferred. There are no separate reviewed/proposed/stale authority
+states. The foundation spec defines enforced write rules.
 
 ---
 
@@ -602,10 +573,9 @@ Task:
 
 > Fix duplicate Stripe webhook processing.
 
-Relevant graph:
+Relevant graph within one project scope (Project itself is not a graph node):
 
-Project
-→ Backend
+Backend
 → Payments
 → Stripe
 → Webhooks
@@ -613,14 +583,14 @@ Project
 Webhooks
 → REQUIRES → Idempotency
 
-Webhooks
-→ IMPLEMENTED_BY → `src/payments/webhook.ts`
+`src/payments/webhook.ts`
+→ IMPLEMENTS → Webhooks
 
 Duplicate Payments
 → CAUSED_BY → Duplicate Webhook Delivery
 
-Idempotency
-→ IMPLEMENTED_BY → Event ID Store
+Event ID Store
+→ IMPLEMENTS → Idempotency
 
 Context compiler may output:
 
@@ -701,18 +671,16 @@ For the hackathon, prefer the smallest architecture that proves the idea.
 
 ---
 
-## 16. Open questions
+## 16. Decisions and remaining implementation gates
 
-These should be resolved through feature specs as implementation progresses.
+Resolved at kickoff: seven node types, eight edge types, File as a node, Project
+and Source as separate records, prepared-example ingestion, manual summaries,
+two authority values, immutable node snapshots, current-only retrieval, and
+JSON/copy agent handoff. No branch model, OAuth, or automatic stale detection.
 
-- What exact node types should MVP support?
-- How much graph extraction should be automatic?
-- Should code files themselves be graph nodes or metadata on components?
-- How should token cost be estimated?
-- How should node summaries be generated and cached?
-- How are stale nodes detected?
-- What qualifies as a context revision?
-- Does MVP require context branches or only revision history?
-- Should GitHub integration be OAuth-based or demo-repository based?
-- What agent interface is best for the demo: copyable prompt, API, or MCP?
-- Which graph visualization library should be used?
+Later specs are deliberately scoped drafts. Before their implementation, finish
+the manifest schema/fixture, workbench wireframe and graph rendering choice,
+and the compiler's embedding provider/model, tokenizer, scoring constants, and
+evaluation fixture. These are explicit gates in [the MVP plan](MVP_PLAN.md), not
+decisions left to the foundation implementer. Provider access and PostgreSQL
+runtime availability have not been verified by this documentation-only kickoff.
