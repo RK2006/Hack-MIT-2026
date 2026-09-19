@@ -1,7 +1,7 @@
-import { graphError } from '../context/errors.js';
-import type { GraphStore } from '../context/types.js';
-import { assertSameOrigin, json, readJson } from '../http.js';
-import { createOperatorNode, reviseOperatorNode } from './mutations.js';
+import { graphError } from '../context/errors';
+import type { GraphStore } from '../context/types';
+import { assertSameOrigin, json, readJson } from '../http';
+import { createOperatorNode, reviseOperatorNode } from './mutations';
 
 export type ProjectParams = { projectId: string };
 export type NodeParams = ProjectParams & { nodeId: string };

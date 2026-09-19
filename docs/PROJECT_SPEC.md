@@ -1,6 +1,6 @@
 # Project Spec — Context Graph
 
-Status: MVP scope reconciled; implementation not started
+Status: MVP implemented (foundation, ingestion, workbench, compiler); see feature specs for verification state
 Owner: Project team
 Development model: Spec-driven
 Last reconciled: 2026-09-19
@@ -420,10 +420,12 @@ the original spec's Next.js/React and PostgreSQL direction.
   [the foundation spec](specs/context-graph-foundation.md).
 - Application-level traversal of a bounded project graph. Up to 1,000 nodes and
   5,000 edges per project; oversized imports fail explicitly.
-- One configured hosted embedding backend for semantic matching, with a small
-  revision-keyed cache and cosine scoring in application code. Provider/model
-  and tokenizer are selected in the task-context spec before its implementation.
-  No pgvector dependency is needed at this graph size.
+- One configured embedding backend for semantic matching, with a small
+  revision-keyed cache and cosine scoring in application code. The compiler spec
+  selected a local in-process sentence-transformer as the default (no hosted
+  embedding credential was available) and an optional hosted OpenAI adapter behind
+  the same interface; tokenizer is `cl100k_base`. No pgvector dependency is needed
+  at this graph size.
 - Vitest for domain and real-PostgreSQL integration tests; TypeScript checking,
   ESLint, formatting, and later a Next.js build check.
 

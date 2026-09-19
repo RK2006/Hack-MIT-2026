@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { COMPARED_FIELDS, compareRevisions } from '../../src/lib/compare.js';
-import type { NodeRevision } from '../../src/server/context/types.js';
+import { COMPARED_FIELDS, compareRevisions } from '../../src/lib/compare';
+import type { NodeRevision } from '../../src/server/context/types';
 
 const v1: NodeRevision = {
   projectId: 'p',

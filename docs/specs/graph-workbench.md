@@ -1,6 +1,6 @@
 # Feature Spec — Graph Workbench and Context Review
 
-Status: Implementation-ready; implementation in progress
+Status: Implemented; automated checks verified, browser checklist documented for the operator
 Owner: Project team
 Related issue/task: [MVP plan](../MVP_PLAN.md); [foundation](context-graph-foundation.md), [ingestion](prepared-project-ingestion.md), [compiler](task-context-compiler.md)
 Last updated: 2026-09-19
@@ -55,29 +55,33 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
    optional start = selected node, "Allow degraded" checkbox off by default,
    Compile. Result: status, tokenizer, model, measured tokens vs budget vs
    measured project context tokens, ranked selected items with reasons/paths and
-   authority labels, omissions, warnings, rendered text with Copy. Graph and list
-   highlight selected node IDs. Editing after compile marks the bundle "stale;
-   recompile" without hiding it.
+   authority labels, omissions, warnings, rendered text with Copy. Each graph
+   reason lists its path steps (from → TYPE → to, with edge authority), and the
+   graph highlights selected node IDs and path edges. A running or failed compile
+   clears highlights so they never belong to a stale request. Editing after
+   compile marks the bundle "stale; recompile" without hiding it.
 
 Empty project, loading, validation error, conflict, compiler failure/degraded
 response, and budget insufficiency states are visible. A stale edit shows the
-conflict (expected/actual versions) and a "Reload current" action; drafts persist.
+conflict (expected/actual versions) and a "Reload current" action that advances
+the expected version and reports the current title while keeping the operator's
+draft untouched; saving again is a deliberate overwrite of the newer revision.
 
 ## 6. Functional requirements
 
-- [ ] W1: Render current active nodes and typed directed relationships; provide a
+- [x] W1: Render current active nodes and typed directed relationships; provide a
       node list/details fallback so the graph is not the sole means of navigation.
-- [ ] W2: Display source locator, pinned reference, excerpt, actor/reason, revision,
+- [x] W2: Display source locator, pinned reference, excerpt, actor/reason, revision,
       and canonical/inferred labels; inferred edges remain visibly distinguishable.
-- [ ] W3: Support manual node creation, editing, review, archive/unarchive, with
+- [x] W3: Support manual node creation, editing, review, archive/unarchive, with
       foundation validation, fresh manual evidence, and expected-version conflicts.
-- [ ] W4: Display archived nodes in a separate list/detail/history path so they
+- [x] W4: Display archived nodes in a separate list/detail/history path so they
       remain accessible after leaving the active graph.
-- [ ] W5: Compare any two revisions of the same node, showing changed snapshot
+- [x] W5: Compare any two revisions of the same node, showing changed snapshot
       fields and source references; history view does not imply historical graph state.
-- [ ] W6: Submit task/budget/depth, highlight bundle node IDs and explanation paths,
+- [x] W6: Submit task/budget/depth, highlight bundle node IDs and explanation paths,
       show counted tokens/omissions/degraded status, and copy context text exactly.
-- [ ] W7: Preserve editable user input on failures; avoid displaying a previous
+- [x] W7: Preserve editable user input on failures; avoid displaying a previous
       successful bundle as if it belonged to a failed or still-running request.
 
 ## 7. Data model
@@ -107,10 +111,13 @@ migrations applied on first use). Browser code never imports `pg`.
 All responses are JSON. Errors use `{ error: { code, message, details? } }` with
 `VALIDATION_ERROR 400`, `NOT_FOUND 404`, `CONFLICT 409`, `AUTHORITY_VIOLATION 403`,
 `LIMIT_EXCEEDED 422`, `EMBEDDING_UNAVAILABLE 503`, `STORAGE_ERROR 500`, and
-`FORBIDDEN_ORIGIN 403` for cross-origin mutations. Mutations (`POST`) require the
-`Origin` header, when present, to match the request's own origin, or
-`Sec-Fetch-Site: same-origin`; requests with neither header are accepted as
-non-browser local tooling.
+`FORBIDDEN_ORIGIN 403` for cross-origin mutations. Mutations (`POST`) are accepted
+when `Sec-Fetch-Site` is `same-origin` or `none` (user-initiated), or when the
+`Origin` header's host equals the request `Host` header (Next normalizes
+`request.url` to `localhost`, so the URL origin is not used); requests with neither
+header are accepted as non-browser local tooling. Everything else is 403.
+`GET .../nodes` without `archived=true` is a 400: active nodes come from `/graph`.
+`POST .../nodes` answers 201.
 
 | Route                                               | Response                                            |
 | --------------------------------------------------- | --------------------------------------------------- |
@@ -191,12 +198,12 @@ selection reasons. No source text or secrets in request logs.
 
 ## 14. Acceptance criteria
 
-- [ ] A1: An imported project can be explored by graph and list, with correct edge
+- [x] A1: An imported project can be explored by graph and list, with correct edge
       direction, evidence, current revision, and authority labels.
-- [ ] A2: Manual create/edit/review/archive/restore persist correctly; a stale edit
+- [x] A2: Manual create/edit/review/archive/restore persist correctly; a stale edit
       displays a conflict without overwriting, and archived history remains reachable.
-- [ ] A3: Comparing two revisions shows changed content, authority, source, and reason while leaving current state unchanged.
-- [ ] A4: Task controls display the compiler selection, paths, token count, omissions,
+- [x] A3: Comparing two revisions shows changed content, authority, source, and reason while leaving current state unchanged.
+- [x] A4: Task controls display the compiler selection, paths, token count, omissions,
       and exact copyable text; invalid/unavailable/degraded/empty states are clear.
 - [ ] A5: The complete demo in the MVP plan succeeds, including a history change and subsequent current-context retrieval.
 
@@ -206,6 +213,7 @@ selection reasons. No source text or secrets in request logs.
 
 - A3: `tests/workbench/compare.test.ts` — snapshot comparison across every field.
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
+- §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
 
@@ -242,8 +250,8 @@ selection reasons. No source text or secrets in request logs.
 - [x] Freeze renderer, route payloads, archived-list reader, conflict behavior, and browser acceptance steps (this document).
 - [x] Add `listArchivedNodes`, runtime store, HTTP helpers, read routes, project list page, graph/list/detail/evidence; verify A1.
 - [x] Add manual create/edit/review/archive/restore routes + forms and two-revision comparison; verify A2/A3.
-- [ ] Integrate task panel against `ContextBundle`; verify A4.
-- [ ] Execute the manual demo checklist (A5), run all checks, update durable context, commit/push.
+- [x] Integrate task panel against `ContextBundle`; verify A4 (route/contract automated; panel rendering by manual checklist).
+- [~] Execute the manual demo checklist (A5): API-level run of steps 1–7 verified over HTTP on 2026-09-19; browser walkthrough is the operator's final check. All automated checks pass; durable context updated; committed.
 
 ## 17. Alternatives considered
 
@@ -298,3 +306,22 @@ Findings from the read/edit/history slice:
   relationships until it is restored.
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph
   snapshot so archived nodes open in the same detail/history/restore path.
+
+Findings from the task-panel integration:
+
+- `TaskPanel` is the only consumer of `ContextBundle`; it renders reasons and
+  `PathStep` sequences verbatim from the compiler and never re-ranks. Highlights
+  (node IDs plus path edge IDs) are derived from the displayed bundle and cleared
+  while a request runs or after it fails, so a failed compile cannot leave a
+  previous selection looking current. A bundle compiled before a mutation is
+  labeled stale using the workbench's `graphVersion` counter.
+- The metric shown as "All active context" is `metrics.projectContextTokens`
+  (measured, `cl100k_base`, full text of every active node); the demo fixture is
+  ~2.2–2.4k tokens total, so the honest demo ratio is roughly 1.5k/2.3k at a
+  4,096 budget and ~0.5k/2.3k at 512, not the aspirational 5k/100k figure.
+- The process-wide runtime drops a failed store initialization instead of caching
+  the rejected promise, and migrations are embedded TypeScript strings because
+  Turbopack rewrites `new URL(..., import.meta.url)` file reads as static assets.
+- The first compile in a fresh process loads the local embedding model (~15 s on
+  first ever run while it downloads; a few seconds afterwards); later compiles are
+  sub-second. The UI says so while running.

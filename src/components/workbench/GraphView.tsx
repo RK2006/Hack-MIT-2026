@@ -14,6 +14,7 @@ type Props = {
   edges: ContextEdge[];
   selectedNodeId: string | null;
   highlightedNodeIds: Set<string>;
+  highlightedEdgeIds?: Set<string>;
   onSelect: (nodeId: string) => void;
 };
 
@@ -22,6 +23,7 @@ export default function GraphView({
   edges,
   selectedNodeId,
   highlightedNodeIds,
+  highlightedEdgeIds,
   onSelect,
 }: Props) {
   const positions = useMemo(() => layoutGraph(nodes, edges, WIDTH, HEIGHT), [nodes, edges]);
@@ -64,15 +66,16 @@ export default function GraphView({
           const sx = from.x + (dx / len) * RADIUS;
           const sy = from.y + (dy / len) * RADIUS;
           const inferred = edge.authority === 'inferred';
+          const onPath = highlightedEdgeIds?.has(edge.id) ?? false;
           return (
-            <g key={edge.id} className={`edge edge-${edge.authority}`}>
+            <g key={edge.id} className={`edge edge-${edge.authority}${onPath ? ' edge-path' : ''}`}>
               <line
                 x1={sx}
                 y1={sy}
                 x2={ex}
                 y2={ey}
-                stroke="#555"
-                strokeWidth={1.2}
+                stroke={onPath ? '#f59e0b' : '#555'}
+                strokeWidth={onPath ? 3 : 1.2}
                 strokeDasharray={inferred ? '5 4' : undefined}
                 markerEnd="url(#arrow)"
               />

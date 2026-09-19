@@ -7,6 +7,7 @@ import type {
   Source,
 } from '@/server/context/types';
 import type { CreateNodeRequest, ReviseNodeRequest } from '@/server/workbench/mutations';
+import type { ContextBundle, ContextRequest } from '@/server/context/compiler/types';
 
 export class ApiError extends Error {
   constructor(
@@ -78,6 +79,8 @@ export const api = {
       `${base(projectId)}/nodes/${encodeURIComponent(nodeId)}/revisions`,
       payload,
     ),
+  compileContext: (projectId: string, payload: ContextRequest) =>
+    post<ContextBundle>(`${base(projectId)}/context`, payload),
 };
 
 export const errorMessage = (error: unknown): string =>

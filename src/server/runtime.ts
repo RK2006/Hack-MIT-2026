@@ -17,10 +17,13 @@ const globalRuntime = globalThis as typeof globalThis & { __contextGraphRuntime?
 function runtime(): Runtime {
   if (!globalRuntime.__contextGraphRuntime) {
     const pool = createPool();
-    globalRuntime.__contextGraphRuntime = {
-      pool,
-      store: migrate(pool).then(() => createGraphStore(pool)),
-    };
+    const store = migrate(pool).then(() => createGraphStore(pool));
+    // A failed initialization must not be cached; the next request retries from scratch.
+    store.catch(() => {
+      delete globalRuntime.__contextGraphRuntime;
+      void pool.end().catch(() => undefined);
+    });
+    globalRuntime.__contextGraphRuntime = { pool, store };
   }
   return globalRuntime.__contextGraphRuntime;
 }

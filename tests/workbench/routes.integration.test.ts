@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { createGraphStore } from '../../src/server/context/store.js';
-import type { ContextEdge, ContextNode, GraphSnapshot } from '../../src/server/context/types.js';
-import { DEMO_PROJECT_ID } from '../../src/server/ingestion/demo-expectations.js';
-import { importPreparedProject } from '../../src/server/ingestion/import.js';
-import { errorResponse } from '../../src/server/http.js';
+import { createGraphStore } from '../../src/server/context/store';
+import type { ContextEdge, ContextNode, GraphSnapshot } from '../../src/server/context/types';
+import { DEMO_PROJECT_ID } from '../../src/server/ingestion/demo-expectations';
+import { importPreparedProject } from '../../src/server/ingestion/import';
+import { errorResponse } from '../../src/server/http';
 import {
   handleCreateNode,
   handleGetGraph,
@@ -14,8 +14,8 @@ import {
   handleListProjects,
   handleListRevisions,
   handleReviseNode,
-} from '../../src/server/workbench/handlers.js';
-import { isolatedDatabase } from '../helpers/postgres.js';
+} from '../../src/server/workbench/handlers';
+import { isolatedDatabase } from '../helpers/postgres';
 
 const ORIGIN = 'http://127.0.0.1:3000';
 const base = `${ORIGIN}/api/projects/${DEMO_PROJECT_ID}`;

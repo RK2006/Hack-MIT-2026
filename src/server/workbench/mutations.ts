@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { graphError } from '../context/errors.js';
+import { graphError } from '../context/errors';
 import {
   AUTHORITIES,
   EDGE_TYPES,
@@ -10,7 +10,7 @@ import {
   type ContextNode,
   type CreateNodeInput,
   type GraphStore,
-} from '../context/types.js';
+} from '../context/types';
 
 /** Every workbench write is attributed to the local human operator; payloads cannot choose it. */
 export const OPERATOR_ACTOR: Actor = { kind: 'human', label: 'local-operator' };

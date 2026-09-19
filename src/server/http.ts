@@ -33,7 +33,11 @@ export function errorResponse(error: unknown): Response {
     };
     return json(body, STATUS[error.code]);
   }
-  console.error({ operation: 'route', code: 'STORAGE_ERROR' });
+  console.error({
+    operation: 'route',
+    code: 'STORAGE_ERROR',
+    error: error instanceof Error ? `${error.name}: ${error.message}` : 'unknown',
+  });
   return json(
     {
       error: { code: 'STORAGE_ERROR', message: 'Unexpected server error' },

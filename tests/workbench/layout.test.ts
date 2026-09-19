@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeLink, layoutGraph } from '../../src/lib/layout.js';
+import { isSafeLink, layoutGraph } from '../../src/lib/layout';
 
 const nodes = Array.from({ length: 12 }, (_, i) => ({ id: `node-${i}` }));
 const edges = [

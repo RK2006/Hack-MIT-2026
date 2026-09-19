@@ -126,14 +126,13 @@ export default function NodeForm({ projectId, mode, onSaved, onCancel }: Props) 
     setBusy(true);
     try {
       const fresh = await api.getNode(projectId, mode.node.id);
-      setDraft((prev) => ({
-        ...seed({ ...mode, node: fresh }),
-        changeReason: prev.changeReason,
-        evidenceNote: prev.evidenceNote,
-      }));
+      // Keep the operator's draft; only the expected version moves forward so the save can be retried
+      // deliberately against the newer knowledge (never silently over it).
       setExpectedVersion(fresh.current.version);
       setError(null);
-      setNotice(`Reloaded version ${fresh.current.version}; your reason and evidence were kept.`);
+      setNotice(
+        `Reloaded: current version is now ${fresh.current.version} ("${fresh.current.title}"). Your draft was kept; review it against the current node before saving.`,
+      );
     } catch (err) {
       setError(err instanceof Error ? err : new Error(String(err)));
     } finally {

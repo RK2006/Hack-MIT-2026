@@ -1,6 +1,6 @@
 # MVP kickoff and build plan
 
-Status: Kickoff specification complete; product implementation not started
+Status: Kickoff specification complete; all five build steps implemented (see feature specs §18 for observed results)
 Date: 2026-09-19
 Related: [project spec](PROJECT_SPEC.md), [kickoff workflow](../CODEX_KICKOFF_PROMPT.md)
 

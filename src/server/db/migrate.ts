@@ -1,17 +1,10 @@
-import { readFile } from 'node:fs/promises';
 import type { Pool } from 'pg';
 
 export type Migration = { version: string; sql: string };
 
-const MIGRATION_VERSIONS = ['001_context_graph', '002_context_embeddings'] as const;
-
 export async function productionMigrations(): Promise<Migration[]> {
-  return Promise.all(
-    MIGRATION_VERSIONS.map(async (version) => ({
-      version,
-      sql: await readFile(new URL(`./migrations/${version}.sql`, import.meta.url), 'utf8'),
-    })),
-  );
+  const { MIGRATIONS } = await import('./migrations');
+  return MIGRATIONS;
 }
 
 export async function migrate(pool: Pool, migrations?: Migration[]): Promise<string[]> {

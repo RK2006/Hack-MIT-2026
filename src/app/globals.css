@@ -292,7 +292,7 @@ tr.changed {
 .right-bottom {
   border-top: 1px solid var(--border);
   padding: 8px 12px;
-  max-height: 45%;
+  max-height: 60%;
   overflow: auto;
 }
 .collapse {
@@ -457,4 +457,127 @@ tr.changed {
 
 .task-panel {
   padding-bottom: 4px;
+}
+
+/* Task panel */
+.task-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.task-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+}
+.task-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.task-controls input[type='number'] {
+  width: 90px;
+}
+.task-controls label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+.bundle {
+  margin-top: 10px;
+}
+.bundle h3 {
+  font-size: 14px;
+  margin: 12px 0 6px;
+}
+.bundle-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 6px 12px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+}
+.bundle-metrics dt {
+  color: #6b7280;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bundle-metrics dd {
+  margin: 0;
+}
+.warning {
+  color: #92400e;
+}
+.warnings {
+  padding-left: 18px;
+  font-size: 13px;
+}
+.selected,
+.omissions {
+  padding-left: 18px;
+  font-size: 13px;
+}
+.selected > li {
+  margin-bottom: 8px;
+}
+.selected-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.selected-head .link {
+  font-weight: 600;
+}
+.reasons {
+  margin: 2px 0 0;
+  padding-left: 16px;
+  color: #374151;
+}
+.reason-kind {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #e5e7eb;
+}
+.reason-semantic_match,
+.reason-lexical_match {
+  background: #dbeafe;
+}
+.reason-explicit_reference {
+  background: #dcfce7;
+}
+.reason-graph_neighbor {
+  background: #ede9fe;
+}
+.small {
+  font-size: 11px;
+}
+.context-text-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.context-text {
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+.path {
+  margin: 2px 0 4px;
+  padding-left: 16px;
+}
+.graph .node:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }

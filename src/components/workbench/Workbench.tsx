@@ -25,6 +25,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
   const [selectedNode, setSelectedNode] = useState<ContextNode | null>(null);
   const [selectedError, setSelectedError] = useState<string | null>(null);
   const [highlightedNodeIds, setHighlightedNodeIds] = useState<Set<string>>(() => new Set());
+  const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<Set<string>>(() => new Set());
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>({ kind: 'detail' });
   const [taskOpen, setTaskOpen] = useState(true);
@@ -116,8 +117,9 @@ export default function Workbench({ projectId }: { projectId: string }) {
     setPanel({ kind: 'form', mode: { kind: action, node: selectedNode } });
   };
 
-  const onHighlight = useCallback((nodeIds: string[]) => {
+  const onHighlight = useCallback((nodeIds: string[], edgeIds: string[] = []) => {
     setHighlightedNodeIds(new Set(nodeIds));
+    setHighlightedEdgeIds(new Set(edgeIds));
   }, []);
 
   return (
@@ -148,7 +150,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
           New node
         </button>
         {highlightedNodeIds.size > 0 ? (
-          <button type="button" onClick={() => setHighlightedNodeIds(new Set())}>
+          <button type="button" onClick={() => onHighlight([])}>
             Clear highlight ({highlightedNodeIds.size})
           </button>
         ) : null}
@@ -179,6 +181,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
                 edges={graph.edges}
                 selectedNodeId={selectedNodeId}
                 highlightedNodeIds={highlightedNodeIds}
+                highlightedEdgeIds={highlightedEdgeIds}
                 onSelect={selectNode}
               />
             </>

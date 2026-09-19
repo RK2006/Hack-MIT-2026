@@ -315,7 +315,7 @@ No HTTP API in this feature. Implement a server-only module; the future Next.js
 routes, importer, and compiler reuse it. Proposed files are not present yet:
 
 - `src/server/context/types.ts`, `validation.ts`, `store.ts`
-- `src/server/db/pool.ts`, `migrate.ts`, `migrations/001_context_graph.sql`
+- `src/server/db/pool.ts`, `migrate.ts`, `migrations.ts` (SQL embedded as strings so Next.js bundling and tsx resolve migrations identically; originally planned as `migrations/001_context_graph.sql`)
 - `tests/context/validation.test.ts`, `store.integration.test.ts`
 - `scripts/context-smoke.ts` (future verification command, not a separate product CLI)
 
