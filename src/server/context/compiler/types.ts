@@ -1,4 +1,4 @@
-import type { Authority, EdgeType, NodeType } from '../types.js';
+import type { Authority, EdgeType, NodeType } from '../types';
 
 export type ContextRequest = {
   task: string;
@@ -44,7 +44,7 @@ export type SelectedItem = {
   reasons: SelectionReason[];
 };
 
-export type OmissionReason = 'budget' | 'candidate_limit' | 'embedding_unavailable';
+export type OmissionReason = 'budget' | 'candidate_limit';
 
 export type Omission = {
   nodeId: string;

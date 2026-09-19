@@ -1,18 +1,43 @@
-import { createGraphStore } from './context/store.js';
-import type { GraphStore } from './context/types.js';
-import { createPool } from './db/pool.js';
-import { migrate } from './db/migrate.js';
+import type { Pool } from 'pg';
+import { createGraphStore } from './context/store';
+import type { GraphStore } from './context/types';
+import { createPool } from './db/pool';
+import { migrate } from './db/migrate';
+import { createEmbeddingCache } from './context/compiler/cache';
+import { embeddingProviderFromEnv, type EmbeddingProvider } from './context/compiler/embedding';
+import type { CompilerDeps } from './context/compiler/compile';
 
-type Runtime = { store: Promise<GraphStore> };
+type Runtime = {
+  pool: Pool;
+  store: Promise<GraphStore>;
+  provider?: EmbeddingProvider;
+};
 const globalRuntime = globalThis as typeof globalThis & { __contextGraphRuntime?: Runtime };
 
-/** One store per server process; survives Next.js dev-mode module reloads. */
-export function getStore(): Promise<GraphStore> {
+function runtime(): Runtime {
   if (!globalRuntime.__contextGraphRuntime) {
     const pool = createPool();
     globalRuntime.__contextGraphRuntime = {
+      pool,
       store: migrate(pool).then(() => createGraphStore(pool)),
     };
   }
-  return globalRuntime.__contextGraphRuntime.store;
+  return globalRuntime.__contextGraphRuntime;
+}
+
+/** One store per server process; survives Next.js dev-mode module reloads. */
+export function getStore(): Promise<GraphStore> {
+  return runtime().store;
+}
+
+/** Compiler dependencies sharing the process pool; the provider is created lazily from the environment. */
+export async function getCompilerDeps(): Promise<CompilerDeps> {
+  const current = runtime();
+  current.provider ??= embeddingProviderFromEnv();
+  return {
+    store: await current.store,
+    provider: current.provider,
+    cache: createEmbeddingCache(current.pool),
+    log: (event) => console.info({ operation: 'compileContext', ...event }),
+  };
 }

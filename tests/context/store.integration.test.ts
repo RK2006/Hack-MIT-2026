@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createGraphStore } from '../../src/server/context/store.js';
-import { snapshotOf } from '../../src/server/context/types.js';
-import { migrate } from '../../src/server/db/migrate.js';
-import { isolatedDatabase } from '../helpers/postgres.js';
+import { createGraphStore } from '../../src/server/context/store';
+import { snapshotOf } from '../../src/server/context/types';
+import { migrate } from '../../src/server/db/migrate';
+import { isolatedDatabase } from '../helpers/postgres';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {

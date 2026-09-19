@@ -1,5 +1,5 @@
 import { Pool, type PoolConfig } from 'pg';
-import { graphError } from '../context/errors.js';
+import { graphError } from '../context/errors';
 
 export function createPool(
   connectionString = process.env.DATABASE_URL,

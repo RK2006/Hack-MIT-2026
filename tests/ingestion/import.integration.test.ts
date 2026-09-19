@@ -1,11 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { Pool } from 'pg';
 import { describe, expect, it, afterEach } from 'vitest';
-import { createGraphStore } from '../../src/server/context/store.js';
-import { snapshotOf, type GraphStore } from '../../src/server/context/types.js';
-import { importPreparedProject } from '../../src/server/ingestion/import.js';
-import { DEMO_PROJECT_ID } from '../../src/server/ingestion/demo-expectations.js';
-import { isolatedDatabase } from '../helpers/postgres.js';
+import { createGraphStore } from '../../src/server/context/store';
+import { snapshotOf, type GraphStore } from '../../src/server/context/types';
+import { importPreparedProject } from '../../src/server/ingestion/import';
+import { DEMO_PROJECT_ID } from '../../src/server/ingestion/demo-expectations';
+import { isolatedDatabase } from '../helpers/postgres';
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {

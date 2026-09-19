@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import { createPool } from './pool.js';
-import { migrate } from './migrate.js';
+import { createPool } from './pool';
+import { migrate } from './migrate';
 
 const pool = createPool();
 try {

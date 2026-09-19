@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { migrate } from '../../src/server/db/migrate.js';
+import { migrate } from '../../src/server/db/migrate';
 
 export async function isolatedDatabase() {
   const connectionString = process.env.TEST_DATABASE_URL;

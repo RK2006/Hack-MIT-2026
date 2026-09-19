@@ -1,8 +1,8 @@
 import 'dotenv/config';
-import { createGraphStore } from '../src/server/context/store.js';
-import { snapshotOf } from '../src/server/context/types.js';
-import { createPool } from '../src/server/db/pool.js';
-import { migrate } from '../src/server/db/migrate.js';
+import { createGraphStore } from '../src/server/context/store';
+import { snapshotOf } from '../src/server/context/types';
+import { createPool } from '../src/server/db/pool';
+import { migrate } from '../src/server/db/migrate';
 
 const firstPool = createPool();
 await migrate(firstPool);

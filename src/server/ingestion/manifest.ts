@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
-import { GraphError, graphError } from '../context/errors.js';
+import { GraphError, graphError } from '../context/errors';
 import {
   authorizeCreateNode,
   authorizeEdge,
@@ -8,14 +8,14 @@ import {
   parseCreateNode,
   parseProjectInput,
   parseSourceInput,
-} from '../context/validation.js';
+} from '../context/validation';
 import {
   EDGE_TYPES,
   type ContextNode,
   type EdgeType,
   type NodeType,
   type SourceKind,
-} from '../context/types.js';
+} from '../context/types';
 import * as duplicateAwareJson from 'json-dup-key-validator';
 
 const key = z.string().regex(/^[a-z][a-z0-9._-]{0,79}$/);

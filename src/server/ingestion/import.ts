@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto';
-import type { GraphStore } from '../context/types.js';
+import type { GraphStore } from '../context/types';
 import {
   actorFor,
   authorityFor,
   nodeType,
   parseManifestBytes,
   type PreparedNode,
-} from './manifest.js';
+} from './manifest';
 
 export type ImportResult = {
   schemaVersion: 1;

@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
-import { parseManifestBytes } from '../../src/server/ingestion/manifest.js';
-import { importPreparedProject } from '../../src/server/ingestion/import.js';
-import type { GraphStore } from '../../src/server/context/types.js';
+import { parseManifestBytes } from '../../src/server/ingestion/manifest';
+import { importPreparedProject } from '../../src/server/ingestion/import';
+import type { GraphStore } from '../../src/server/context/types';
 import {
   EXPECTED_DISTRACTOR_KEYS,
   EXPECTED_RELEVANT_KEYS,
-} from '../../src/server/ingestion/demo-expectations.js';
+} from '../../src/server/ingestion/demo-expectations';
 
 const encode = (value: string) => new TextEncoder().encode(value);
 

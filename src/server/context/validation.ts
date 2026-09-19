@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { graphError, GraphError } from './errors.js';
+import { graphError, GraphError } from './errors';
 import {
   ACTOR_KINDS,
   AUTHORITIES,
@@ -11,7 +11,7 @@ import {
   type CreateNodeInput,
   type ReviseNodeInput,
   type SourceInput,
-} from './types.js';
+} from './types';
 
 const cpLength = (value: string) => Array.from(value).length;
 const noNul = (value: string) => !value.includes('\0');

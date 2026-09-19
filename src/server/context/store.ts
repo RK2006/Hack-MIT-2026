@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Pool, QueryResult } from 'pg';
-import { GraphError, graphError } from './errors.js';
+import { GraphError, graphError } from './errors';
 import {
   authorizeCreateNode,
   authorizeEdge,
@@ -13,7 +13,7 @@ import {
   parseSourceInput,
   parseUuid,
   parseVersion,
-} from './validation.js';
+} from './validation';
 import type {
   Actor,
   ContextEdge,
@@ -29,8 +29,8 @@ import type {
   ReviseNodeInput,
   Source,
   SourceInput,
-} from './types.js';
-import { snapshotOf } from './types.js';
+} from './types';
+import { snapshotOf } from './types';
 
 type Executor = { query(text: string, values?: unknown[]): Promise<QueryResult<any>> };
 export type StoreLogger = {

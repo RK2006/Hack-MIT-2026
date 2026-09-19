@@ -1,4 +1,4 @@
-import { GraphError, type GraphErrorCode } from './context/errors.js';
+import { GraphError, type GraphErrorCode } from './context/errors';
 
 const STATUS: Record<GraphErrorCode | 'FORBIDDEN_ORIGIN', number> = {
   VALIDATION_ERROR: 400,
@@ -48,8 +48,13 @@ export function assertSameOrigin(request: Request): Response | null {
   const fetchSite = request.headers.get('sec-fetch-site');
   if (fetchSite === 'same-origin' || fetchSite === 'none') return null;
   if (origin) {
-    const requestOrigin = new URL(request.url).origin;
-    if (origin === requestOrigin) return null;
+    // Next may rewrite request.url's host (localhost vs 127.0.0.1); compare against the Host header.
+    const host = request.headers.get('host') ?? new URL(request.url).host;
+    try {
+      if (new URL(origin).host === host) return null;
+    } catch {
+      /* malformed Origin falls through to rejection */
+    }
   } else if (!fetchSite) {
     return null;
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { GraphError } from '../../src/server/context/errors.js';
-import { createGraphStore } from '../../src/server/context/store.js';
+import { GraphError } from '../../src/server/context/errors';
+import { createGraphStore } from '../../src/server/context/store';
 import type { Pool } from 'pg';
 import {
   authorizeCreateNode,
@@ -8,8 +8,8 @@ import {
   authorizeRevision,
   parseCreateNode,
   parseSourceInput,
-} from '../../src/server/context/validation.js';
-import type { ContextNode } from '../../src/server/context/types.js';
+} from '../../src/server/context/validation';
+import type { ContextNode } from '../../src/server/context/types';
 
 const uuid = '00000000-0000-4000-8000-000000000001';
 const human = { kind: 'human' as const, label: ' operator ' };

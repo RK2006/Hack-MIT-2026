@@ -1,6 +1,6 @@
 # Feature Spec — Explainable Task Context Compiler
 
-Status: Implementation-ready; implementation in progress
+Status: Implemented and verified (local embedding backend); hosted-provider smoke not run
 Owner: Project team
 Related issue/task: [MVP plan](../MVP_PLAN.md); depends on [foundation](context-graph-foundation.md); evaluated with [prepared ingestion](prepared-project-ingestion.md); consumed by [workbench](graph-workbench.md)
 Last updated: 2026-09-19
@@ -44,21 +44,21 @@ semantic match. Copying hands off text; the product does not invoke a coding age
 
 ## 6. Functional requirements
 
-- [ ] C1: Read a consistent snapshot of current, active project nodes/edges; never
+- [x] C1: Read a consistent snapshot of current, active project nodes/edges; never
       retrieve historical revisions or raw evidence records as independent claims.
-- [ ] C2: Use real embedding similarity plus explicit file/component references
+- [x] C2: Use real embedding similarity plus explicit file/component references
       for seed discovery; graph expansion must add useful related context.
-- [ ] C3: Bound seeds, depth, and candidates with deterministic tie-breaks and
+- [x] C3: Bound seeds, depth, and candidates with deterministic tie-breaks and
       visited-node tracking, while retaining actual edge directions and authority.
-- [ ] C4: Rank eligible candidates transparently; canonical precedes inferred
+- [x] C4: Rank eligible candidates transparently; canonical precedes inferred
       among relevant candidates, and unrelated canonical nodes are excluded.
-- [ ] C5: Pack full/summary/title representations using the configured tokenizer;
+- [x] C5: Pack full/summary/title representations using the configured tokenizer;
       headings, citations, authority, reasons, and text warnings count toward the budget.
-- [ ] C6: Include source IDs/locators, node versions, representations, reason codes,
+- [x] C6: Include source IDs/locators, node versions, representations, reason codes,
       paths, token accounting, and omissions; label inferred paths as well as claims.
-- [ ] C7: Report essential constraints that cannot fit and provider/indexing gaps;
+- [x] C7: Report essential constraints that cannot fit and provider/indexing gaps;
       do not invent a summary or imply all necessary context was included.
-- [ ] C8: Expose one JSON route and the exact rendered text for copying.
+- [x] C8: Expose one JSON route and the exact rendered text for copying.
 
 ## 7. Data model
 
@@ -167,7 +167,7 @@ type ContextBundle = {
     nodeId: string;
     version: number;
     title: string;
-    reason: 'budget' | 'candidate_limit' | 'embedding_unavailable';
+    reason: 'budget' | 'candidate_limit';
     critical: boolean;
   }>;
   warnings: string[];
@@ -208,21 +208,28 @@ All constants below are the contract; tests assert them with fixed vectors.
 ### Stage 0 — Snapshot
 
 Call `store.getGraph(projectId)` once (REPEATABLE READ). All later stages use
-that snapshot's node versions and edges. Archived nodes and their edges are
+that snapshot's node versions and edges. Source records cited by those revisions
+are read afterwards in parallel; sources are immutable, so this cannot observe
+different content. Archived nodes and their edges are
 already absent. Edits committed during compilation do not enter the bundle.
 
 ### Stage 1 — Similarity
 
-Embed the task and every active node (cache hits by `(nodeId, version, model)`).
+Embed the task and every active node (cache hits by `(nodeId, version, model)`;
+a cached row with the wrong length or non-finite values is treated as a miss).
+Provider output is validated for count, dimensionality, and finiteness. Cache
+writes are best-effort: a cache write failure is logged and the computed vectors
+are still used for this compile.
 `sim(n) = clamp(cosine(task, n), 0, 1)`. Let `sMax = max sim(n)`;
 `semanticNorm(n) = sim(n) / sMax` when `sMax > 0`, else 0.
 
 ### Stage 2 — Seeds
 
-- Explicit seeds: every `startNodeIds` entry; every node whose `path` appears
-  in the task (case-insensitive substring); every node whose `externalKey`
-  appears in the task; every node whose title (≥ 8 code points) appears in the
-  task case-insensitively. Explicit seed relevance is `1.0`.
+- Explicit seeds: every `startNodeIds` entry; every node whose `path`,
+  `externalKey`, or title appears in the task case-insensitively as a whole
+  token (not embedded inside a longer word). Keys and titles must be at least
+  8 code points long so that short keys such as `a` or `db` cannot match by
+  accident; paths have no length floor. Explicit seed relevance is `1.0`.
 - Semantic seeds: nodes with `sim ≥ minSeedSimilarity` (local `0.25`,
   openai `0.30`), sorted by `sim` desc then nodeId asc, top 5. Seed relevance
   is `semanticNorm(n)`.
@@ -246,8 +253,11 @@ from `u` to `v` uses weight `w(T, direction)`:
 | CONTAINS   | 0.3 (children) — skipped from hubs       | 0.4 (parent)                                   |
 
 `relevance(v) = max(relevance(v), relevance(u) × w)`. The path producing the
-best relevance is recorded; a node is expanded once (visited set), with the
-depth at which it was first dequeued. Hub rule: forward CONTAINS edges are not
+best relevance is recorded; a node is expanded once (visited set), using the
+relevance it holds when dequeued (a single BFS pass, not a fixpoint: a node whose
+relevance improves after it was expanded does not re-propagate). A node whose
+recorded path already has `maxDepth` steps is not expanded, so no recorded path
+exceeds `maxDepth` even when a seed is re-parented onto a longer path. Hub rule: forward CONTAINS edges are not
 followed from a node with more than 5 outgoing CONTAINS edges. Nodes whose
 relevance is below `ELIGIBILITY_FLOOR = 0.25` are neither eligible nor expanded.
 Cycles terminate through the visited set; every path contains real edge IDs
@@ -312,11 +322,13 @@ in the text. Empty eligible set renders header plus
 
 ### Degraded mode
 
-When the provider fails and `allowDegraded` is true: `sim` is replaced by
-lexical overlap (Jaccard of lowercase word tokens ≥ 3 characters between the
+When the provider fails and `allowDegraded` is true (after any batch fails, the
+remaining batches are not attempted; nodes embedded before the failure keep no
+special status): `sim` is replaced by lexical overlap (Jaccard of lowercase word tokens ≥ 3 characters between the
 task and the node's embedding input, `minSeedSimilarity = 0.08`), reasons use
 kind `lexical_match`, `status = 'degraded'`, `embeddingModel = 'lexical-fallback'`.
-This is a debugging mode and does not satisfy A1.
+A partial failure adds the warning `N of M nodes could not be embedded; lexical
+matching was used for all.` This is a debugging mode and does not satisfy A1.
 
 ### Project context metric
 
@@ -356,19 +368,19 @@ category, stage durations, and counts only.
 
 ## 14. Acceptance criteria
 
-- [ ] A1: A paraphrased task retrieves a useful semantic seed and at least one
+- [x] A1: A paraphrased task retrieves a useful semantic seed and at least one
       useful graph neighbor without direct keyword overlap; unrelated distractors are excluded.
-- [ ] A2: Among eligible competing claims, canonical precedes weak inferred;
+- [x] A2: Among eligible competing claims, canonical precedes weak inferred;
       inferred claims/path edges stay labeled, and unrelated canonical nodes do not win.
-- [ ] A3: Complete rendered context always fits the selected tokenizer budget,
+- [x] A3: Complete rendered context always fits the selected tokenizer budget,
       including Unicode, headers, citations, warnings, and small-budget cases.
-- [ ] A4: Every selected item has an existing node/version/source and a faithful
+- [x] A4: Every selected item has an existing node/version/source and a faithful
       reason; graph paths contain real edges with correct direction and authority.
-- [ ] A5: Cycles/limits terminate deterministically; critical omissions, no fits,
+- [x] A5: Cycles/limits terminate deterministically; critical omissions, no fits,
       no matches, provider failure, and partial coverage are explicit.
-- [ ] A6: Editing a node changes the retrieved current version and cache key without
+- [x] A6: Editing a node changes the retrieved current version and cache key without
       altering old history; an in-flight snapshot stays internally consistent.
-- [ ] A7: JSON route and copied context match the bundle contract and satisfy the integrated workbench demo.
+- [x] A7: JSON route and copied context match the bundle contract and satisfy the integrated workbench demo.
 
 ## 15. Test plan
 
@@ -404,11 +416,11 @@ category, stage durations, and counts only.
 ## 16. Implementation plan
 
 - [x] Finalize provider/model, tokenizer, cache migration, contracts, scoring/eligibility, representation rules, caps, and fixture expectations (this document).
-- [ ] Migration 002, `EMBEDDING_UNAVAILABLE`, provider interface with local/openai/fixed adapters, cache module; verify cache keying (A6).
-- [ ] Retrieval (similarity, seeds, expansion, ranking, reasons); verify A1/A2/A4/A5 with fixed fixtures.
-- [ ] Tokenizer, rendering, packing; verify A3 and budget omissions.
-- [ ] `compileContext`, JSON route, semantic smoke script; verify A7 and real-provider A1.
-- [ ] Run tests/typecheck/lint/format/build; record model/tokenizer/observations in §18; commit/push.
+- [x] Migration 002, `EMBEDDING_UNAVAILABLE`, provider interface with local/openai/fixed adapters, cache module; verify cache keying (A6).
+- [x] Retrieval (similarity, seeds, expansion, ranking, reasons); verify A1/A2/A4/A5 with fixed fixtures.
+- [x] Tokenizer, rendering, packing; verify A3 and budget omissions.
+- [x] `compileContext`, JSON route, semantic smoke script; verify A7 and real-provider A1 (local backend).
+- [x] Run tests/typecheck/lint/format/build; record model/tokenizer/observations in §18; commit/push.
 
 ## 17. Alternatives considered
 
@@ -442,5 +454,19 @@ node versions and source IDs; evidence and inferred edges remain labeled;
 canonical preference follows relevance eligibility; lexical fallback is degraded,
 not semantic success. Embedding backend is selected by `EMBEDDING_PROVIDER`
 (`local` default, `openai` optional); the cache key includes the model id so
-switching providers never reuses vectors. Observed results are recorded here
-after implementation.
+switching providers never reuses vectors.
+
+Observed on 2026-09-19 with `local:Xenova/all-MiniLM-L6-v2` (quantized ONNX via
+`@xenova/transformers@2.17.2`; `onnxruntime-node` 1.14 works on this macOS 12
+host where the newer `@huggingface/transformers` native binding does not load):
+`npm run semantic:smoke` for "Fix duplicate Stripe webhook processing" at budget
+4,096 selected all seven `EXPECTED_RELEVANT_KEYS` and none of the five
+distractors; the paraphrased inferred bug scored similarity 0.38, the in-memory
+assumption 0.40, and the receipt store (no task keywords) entered through
+`DEPENDS_ON` with relevance 0.9. Measured sizes: selected context 1,610 tokens
+versus 2,355 tokens for all active demo nodes rendered in full (the demo fixture
+is small; do not claim larger totals). First local-model load takes ~15 s
+(one-time download); later compiles take well under one second. The hosted
+OpenAI adapter is implemented but was not exercised because no credential was
+available. Relative imports in `src/` are extensionless because Turbopack cannot
+resolve `.js`-suffixed imports to `.ts` sources.

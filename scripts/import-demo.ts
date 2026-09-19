@@ -1,11 +1,11 @@
 import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
-import { createGraphStore } from '../src/server/context/store.js';
-import { createPool } from '../src/server/db/pool.js';
-import { migrate } from '../src/server/db/migrate.js';
-import { importPreparedProject } from '../src/server/ingestion/import.js';
-import { GraphError } from '../src/server/context/errors.js';
-import { DEMO_PROJECT_ID } from '../src/server/ingestion/demo-expectations.js';
+import { createGraphStore } from '../src/server/context/store';
+import { createPool } from '../src/server/db/pool';
+import { migrate } from '../src/server/db/migrate';
+import { importPreparedProject } from '../src/server/ingestion/import';
+import { GraphError } from '../src/server/context/errors';
+import { DEMO_PROJECT_ID } from '../src/server/ingestion/demo-expectations';
 
 const bytes = await readFile(new URL('../fixtures/demo-payments.json', import.meta.url));
 const pool = createPool();
