@@ -1,6 +1,6 @@
 # Feature Spec — Versioned Context Graph Foundation
 
-Status: Implementation-ready specification; not implemented
+Status: Implemented and verified
 Owner: Project team
 Related issue/task: Initial Codex kickoff; [MVP plan](../MVP_PLAN.md)
 Last updated: 2026-09-19
@@ -50,15 +50,15 @@ operations to the operator; the foundation has no end-user screen.
 
 ## 6. Functional requirements
 
-- [ ] F1: Create/list/read projects and read a bounded current graph.
-- [ ] F2: Create immutable sources, nodes with revision 1, and typed edges.
-- [ ] F3: Require project-local evidence for every node revision and edge.
-- [ ] F4: Enforce the actor/authority rules below, including during edits.
-- [ ] F5: Append full revision snapshots with an expected-version check; preserve prior snapshots.
-- [ ] F6: Validate inputs, reject cross-project references, duplicates, self-edges, and over-limit writes.
-- [ ] F7: Commit related writes atomically; rollback failures and serialize project mutations.
-- [ ] F8: Hide archived nodes and incident edges from the current graph while retaining readable history.
-- [ ] F9: Supply migrations, repeatable tests against PostgreSQL, and minimal developer commands.
+- [x] F1: Create/list/read projects and read a bounded current graph.
+- [x] F2: Create immutable sources, nodes with revision 1, and typed edges.
+- [x] F3: Require project-local evidence for every node revision and edge.
+- [x] F4: Enforce the actor/authority rules below, including during edits.
+- [x] F5: Append full revision snapshots with an expected-version check; preserve prior snapshots.
+- [x] F6: Validate inputs, reject cross-project references, duplicates, self-edges, and over-limit writes.
+- [x] F7: Commit related writes atomically; rollback failures and serialize project mutations.
+- [x] F8: Hide archived nodes and incident edges from the current graph while retaining readable history.
+- [x] F9: Supply migrations, repeatable tests against PostgreSQL, and minimal developer commands.
 
 ### Authority and mutation policy
 
@@ -72,6 +72,13 @@ Future route handlers set the actor kind themselves; a browser cannot choose it.
 | human | Create/edit either authority; promote or demote; archive/unarchive | Either authority |
 | importer | Create/update canonical `file` and `component` structure only, with `repository` evidence | Canonical `CONTAINS` only, component → component/file, with repository evidence |
 | agent | Create/update inferred nodes only; cannot edit an existing canonical node, even to demote it | Inferred only, with `agent` evidence |
+
+"Existing inferred/canonical" refers to the current revision. Importer updates
+must preserve canonical authority and agent updates must preserve inferred
+authority. Only a human may change authority or the archived flag; importer and
+agent revisions must preserve the current archived value. Importer component/file
+content is a labeled structural description supplied by the prepared manifest,
+not an automatically verified semantic claim.
 
 Human revisions require a `manual` source that records the author/reviewer note.
 Agent revisions require an `agent` source. Importer writes require a `repository`
@@ -296,7 +303,11 @@ migration transactionally and skip an already recorded version. Startup reports
 missing configuration/migrations clearly. Never drop a populated database or
 perform automatic destructive resets. Embedding caches belong to a later compiler
 migration. The prepared importer uses a stable project ID and rejects repeat imports,
-so needs no import-state table.
+so needs no import-state table. The runner accepts an ordered list of
+`{ version, sql }` migration definitions, defaulting to the checked-in production
+migrations. This test seam verifies rollback without changing production behavior.
+Migration startup is single-process for the local MVP; concurrent migration
+coordination is out of scope.
 
 ## 8. API / interface changes
 
@@ -343,13 +354,21 @@ interface GraphStore extends GraphReader {
   transaction<T>(work: (tx: GraphTransaction) => Promise<T>): Promise<T>;
   close(): Promise<void>;
 }
-// createGraphStore(pool: import('pg').Pool): GraphStore
+type StoreLogger = {
+  error(event: { operation: string; code: string; projectId?: string;
+    nodeId?: string; durationMs: number }): void;
+};
+// createGraphStore(pool: import('pg').Pool, { logger }?: { logger?: StoreLogger }): GraphStore
 ```
 
 The store owns its supplied pool; do not share that pool between stores. close()
 ends the pool, is idempotent, and is called only after outstanding operations
 finish. The application keeps one store for its server process; test stores use
 separate pools when independent lifetimes are needed.
+
+The optional logger receives identifiers and safe typed codes only. It never
+receives SQL, connection strings, source excerpts, claim text, or raw errors;
+the default logger emits only the same safe event for unexpected storage failures.
 
 createProject accepts an optional valid UUID; an existing ID is CONFLICT even if
 the name matches. Otherwise it generates a new UUID. It never upserts a project.
@@ -452,18 +471,18 @@ write. No telemetry service or metrics infrastructure is required.
 
 ## 14. Acceptance criteria
 
-- [ ] A1: A fresh PostgreSQL database migrates; rerunning migrations makes no changes or data loss.
-- [ ] A2: A created graph survives store closure/reopening with identical IDs, fields, directions, and sources.
-- [ ] A3: Every supported enum/default validates; malformed/boundary-invalid inputs fail without writes.
-- [ ] A4: Project/source/edge isolation and uniqueness hold, including database-level foreign-key checks.
-- [ ] A5: The complete actor/authority matrix is enforced; inferred content is never silently promoted or allowed to overwrite canonical content.
-- [ ] A6: A changed snapshot produces the next full revision; all prior snapshots/provenance remain byte-for-byte readable.
-- [ ] A7: No-op edits preserve the version; stale edits conflict; two concurrent edits at one version yield exactly one new revision.
-- [ ] A8: Multi-operation failure rolls back everything, including a newly created project and its evidence.
-- [ ] A9: Archival removes a node/incident edges from active reads, preserves history, and unarchive restores visibility.
-- [ ] A10: Cycles are storable, self-edges fail, empty graphs work, and graph reads are internally consistent and deterministically ordered.
-- [ ] A11: Project limits are enforced atomically, including competing writes near the cap.
-- [ ] A12: Developer commands and the smoke flow pass; secrets and private context are absent from error output.
+- [x] A1: A fresh PostgreSQL database migrates; rerunning migrations makes no changes or data loss.
+- [x] A2: A created graph survives store closure/reopening with identical IDs, fields, directions, and sources.
+- [x] A3: Every supported enum/default validates; malformed/boundary-invalid inputs fail without writes.
+- [x] A4: Project/source/edge isolation and uniqueness hold, including database-level foreign-key checks.
+- [x] A5: The complete actor/authority matrix is enforced; inferred content is never silently promoted or allowed to overwrite canonical content.
+- [x] A6: A changed snapshot produces the next full revision; all prior snapshots/provenance remain byte-for-byte readable.
+- [x] A7: No-op edits preserve the version; stale edits conflict; two concurrent edits at one version yield exactly one new revision.
+- [x] A8: Multi-operation failure rolls back everything, including a newly created project and its evidence.
+- [x] A9: Archival removes a node/incident edges from active reads, preserves history, and unarchive restores visibility.
+- [x] A10: Cycles are storable, self-edges fail, empty graphs work, and graph reads are internally consistent and deterministically ordered.
+- [x] A11: Project limits are enforced atomically, including competing writes near the cap.
+- [x] A12: Developer commands and the smoke flow pass; secrets and private context are absent from error output.
 
 ## 15. Test plan
 
@@ -496,6 +515,9 @@ where concurrency matters. Fail clearly if integration configuration is absent;
 do not report skipped database tests as passed. Tests create/drop only their own
 explicitly named schemas. Test reads/mutations through the public store API except
 the deliberate foreign-key probes. No SQLite substitution for PostgreSQL semantics.
+Each test pool fixes its generated identifier-safe schema through the PostgreSQL
+connection `options` setting, so every pooled connection uses the same isolated
+`search_path`; cleanup drops only that explicitly generated schema.
 
 ### UI/manual verification
 
@@ -508,13 +530,13 @@ commands in the future README. Ignore actual `.env` files and local database dat
 
 All items remain unstarted at kickoff. Complete each only after its verification.
 
-- [ ] Bootstrap npm/TypeScript, `pg`, Zod runtime validation, Vitest, ESLint/Prettier, and lockfile; add typecheck/lint/format:check/test scripts. Verify a minimal test and typecheck. Select compatible versions without scaffolding UI.
-- [ ] Add local PostgreSQL 17 configuration, example environment, pool, migration runner, and schema; verify A1 and database startup.
-- [ ] Implement types, validators, error codes, and authority matrix; verify unit portions of A3/A5.
-- [ ] Implement transactional project/source/node/edge creation and current reads; verify A2/A4/A8/A10/A11.
-- [ ] Implement revision replacement, conflicts, history, and archival; verify A5/A6/A7/A9, including concurrent clients.
-- [ ] Finish isolated integration fixtures, smoke command, redacted errors, and setup documentation; verify A3/A12 and all automated acceptance mappings.
-- [ ] Run test, test:integration, typecheck, lint, format:check, and smoke; review diff against this spec and invariants. Update durable findings, then commit/push the verified feature in its future implementation session.
+- [x] Bootstrap npm/TypeScript, `pg`, Zod runtime validation, Vitest, ESLint/Prettier, and lockfile; add typecheck/lint/format:check/test scripts. Verify a minimal test and typecheck. Select compatible versions without scaffolding UI.
+- [x] Add local PostgreSQL 17 configuration, example environment, pool, migration runner, and schema; verify A1 and database startup.
+- [x] Implement types, validators, error codes, and authority matrix; verify unit portions of A3/A5.
+- [x] Implement transactional project/source/node/edge creation and current reads; verify A2/A4/A8/A10/A11.
+- [x] Implement revision replacement, conflicts, history, and archival; verify A5/A6/A7/A9, including concurrent clients.
+- [x] Finish isolated integration fixtures, smoke command, redacted errors, and setup documentation; verify A3/A12 and all automated acceptance mappings.
+- [x] Run test, test:integration, typecheck, lint, format:check, and smoke; review diff against this spec and invariants. Update durable findings, then commit/push the verified feature in its future implementation session.
 
 ## 17. Alternatives considered
 
@@ -545,9 +567,12 @@ all three downstream features without building their behavior prematurely.
 
 ## 18. Durable context created by this feature
 
-Planning decisions: node identity is separate from content revisions; version is
+Implemented decisions: node identity is separate from content revisions; version is
 per node; evidence is immutable and singular per revision/edge; authority is not
 freshness or authentication; graph reads use latest active revisions; edges are
 immutable and carry their own authority. Retrieval must preserve direction and
 inferred-path labels. Relationship correction, full graph history, and public
-deployment are known MVP limitations. No implementation has been verified yet.
+deployment are known MVP limitations. PostgreSQL 17 migrations, isolated-schema
+integration tests, close/reopen smoke verification, authority checks, project
+mutation serialization, nested-transaction rejection, history, and archival were
+verified on 2026-09-19. The store owns its pool and logs only safe typed metadata.

@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: context_graph
+      POSTGRES_PASSWORD: context_graph_local
+      POSTGRES_DB: context_graph
+    ports:
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U context_graph -d context_graph']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - context_graph_pgdata:/var/lib/postgresql/data
+
+volumes:
+  context_graph_pgdata:
