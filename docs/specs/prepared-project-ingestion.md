@@ -1,6 +1,6 @@
 # Feature Spec — Prepared Project Ingestion
 
-Status: Scoped draft; expand before implementation
+Status: Implemented and verified
 Owner: Project team
 Related issue/task: [MVP plan](../MVP_PLAN.md); depends on [foundation](context-graph-foundation.md)
 Last updated: 2026-09-19
@@ -43,17 +43,17 @@ resolution, embedding calls, or executing imported code.
 
 ## 6. Functional requirements
 
-- [ ] I1: Accept one versioned JSON manifest with an explicit project UUID, name,
+- [x] I1: Accept one versioned JSON manifest with an explicit project UUID, name,
   provenance records, component/file entries, claim entries, and directed edges.
-- [ ] I2: Derive canonical component/file nodes and structural CONTAINS edges from
+- [x] I2: Derive canonical component/file nodes and structural CONTAINS edges from
   declared structure only. Do not infer architecture from names or directories.
-- [ ] I3: Curated claims/relations are attributed to the fixture's named human
+- [x] I3: Curated claims/relations are attributed to the fixture's named human
   curator and manual evidence; example agent claims are inferred with agent evidence.
-- [ ] I4: Resolve manifest-local keys to generated UUIDs and validate all references
+- [x] I4: Resolve manifest-local keys to generated UUIDs and validate all references
   and store bounds before opening the write transaction.
-- [ ] I5: Use one foundation transaction for project, sources, nodes, and edges;
+- [x] I5: Use one foundation transaction for project, sources, nodes, and edges;
   failures leave no partial project, and repeated project IDs conflict.
-- [ ] I6: Bundle enough unrelated context for measurable reduction; fixture facts
+- [x] I6: Bundle enough unrelated context for measurable reduction; fixture facts
   and paths are labeled synthetic, not observed facts about this repository.
 
 The digest of original manifest bytes (`sha256:<hex>`) pins repository-type
@@ -71,15 +71,50 @@ its typed structure and immutable evidence. Every node has a unique manifest key
 in `externalKey`, and File nodes use the foundation's normalized-path contract.
 The manifest project UUID supplies createProject's optional id.
 
+Manifest version 1 has this exact strict shape; unknown properties are rejected
+at every level:
+
+```ts
+type ManifestV1 = {
+  schemaVersion: 1;
+  project: { id: string; name: string };
+  sources: Array<{ key: string; kind: 'repository' | 'manual' | 'agent';
+    uri: string; label: string; excerpt: string; actorLabel: string }>;
+  components: Array<{ key: string; title: string; content: string; summary: string;
+    importance: number; confidence: number; sourceKey: string; parentKey?: string }>;
+  files: Array<{ key: string; path: string; title: string; content: string;
+    summary: string; importance: number; confidence: number; sourceKey: string;
+    componentKey: string }>;
+  claims: Array<{ key: string;
+    type: 'decision' | 'constraint' | 'assumption' | 'discovery' | 'bug';
+    title: string; content: string; summary: string; importance: number;
+    confidence: number; sourceKey: string; changeReason: string }>;
+  edges: Array<{ fromKey: string; toKey: string;
+    type: Exclude<EdgeType, 'CONTAINS'>; sourceKey: string }>;
+};
+```
+
+Keys are case-sensitive ASCII slugs matching `^[a-z][a-z0-9._-]{0,79}$`.
+Source keys are unique among sources; node keys are unique across components,
+files, and claims and become `externalKey`. References resolve by exact key.
+Node/source/edge UUIDs are generated; only the project UUID is supplied.
+Components/files are canonical importer writes using repository evidence.
+Structural `CONTAINS` edges derive only from `parentKey` and `componentKey`;
+explicit `CONTAINS` is invalid. Manual sources create canonical human claims and
+edges; agent sources create inferred agent claims and edges. Repository sources
+cannot support claims or explicit edges.
+
 ### Changed entities
 
 None. Reuse the foundation's exact enums, authority matrix, and source semantics.
 
 ### Migration considerations
 
-None. Exact JSON field shapes, manifest version, maximum bytes, duplicate-key
-rules, and the complete example must be specified here before implementation.
-Do not add import tracking tables for incremental synchronization.
+None. Raw input must be valid UTF-8 JSON without a BOM or duplicate object-member
+names and at most 1 MiB. Bounds are 1–1,000 resulting nodes, 1–1,000 sources, and
+1–5,000 total derived plus explicit edges. Duplicate keys, paths, directed typed
+edges, dangling references, incompatible sources, and foundation field violations
+fail before opening a transaction. Do not add import tracking tables.
 
 ## 8. API / interface changes
 
@@ -87,16 +122,21 @@ No upload endpoint in the MVP; a local operator command avoids file-upload scope
 Planned service boundary:
 
 ```ts
-// Exact PreparedProjectManifest JSON schema is a pre-implementation gate.
 // rawBytes are hashed before parsing; they are never executed or fetched.
 importPreparedProject(rawBytes: Uint8Array, store: GraphStore):
-  Promise<{ projectId: string; sources: number; nodes: number; edges: number }>;
+  Promise<{ schemaVersion: 1; projectId: string; sources: number;
+    nodes: number; edges: number; digest: string }>;
 ```
 
 Use the foundation error codes. Add field/key locations to manifest validation
 errors. Existing project UUID is CONFLICT regardless of whether bytes match; do
 not classify duplicate imports as a new successful write. Duplicate imports and
 invalid manifests leave all original revisions and sources unchanged.
+
+Repository `revisionRef` is `sha256:<lowercase hex>` of the exact raw bytes; it is
+not a self-referential manifest field. Manual/agent sources use null. A
+duplicate-aware JSON pass runs before `JSON.parse`. Validation errors include a
+safe `details.path` when practical and never echo the full manifest.
 
 Planned paths: `src/server/ingestion/`, `fixtures/demo-payments.json`,
 `scripts/import-demo.ts`, and `tests/ingestion/`. These do not exist at kickoff.
@@ -114,11 +154,17 @@ Planned paths: `src/server/ingestion/`, `fixtures/demo-payments.json`,
 
 ## 10. Retrieval behavior
 
-No retrieval algorithm here. The fixture must include a semantic paraphrase that
-is useful without exact task keywords, a useful one/two-hop neighbor, competing
-inferred/canonical context, unrelated canonical distractors, and a long constraint
-for budget exhaustion. Pin expected relevant/irrelevant IDs by manifest key in the
-later compiler tests. No generated embeddings are part of the committed fixture.
+No retrieval algorithm here. The exact bundled `demo-payments` fixture uses project
+UUID `7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101`. It contains backend, payments,
+Stripe-webhooks, event-receipt-storage, catalog, search, email, analytics, admin,
+and tax components plus handler/storage files. Pinned anchors are inferred
+`bug.repeated-delivery-side-effects`, canonical
+`constraint.provider-event-id-unique`, canonical
+`decision.record-before-side-effects`, inferred
+`assumption.process-memory-dedupe`, a useful storage neighbor without direct task
+terms, unrelated canonical distractors, and long canonical
+`constraint.webhook-audit-retention`. Compiler expectations live in TypeScript,
+not product ontology. Every evidence excerpt says “synthetic prepared example.”
 
 ## 11. Edge cases
 
@@ -144,11 +190,11 @@ Record attribution in immutable sources, not just transient import logs.
 
 ## 14. Acceptance criteria
 
-- [ ] A1: The prepared manifest creates the expected project, files/components,
+- [x] A1: The prepared manifest creates the expected project, files/components,
   claims, edges, provenance, authority, and initial revisions and survives reopening.
-- [ ] A2: Repeating its project ID, including after a human edit, conflicts without changing any existing row.
-- [ ] A3: Invalid manifests and injected mid-import failures leave no partial project.
-- [ ] A4: The fixture includes every retrieval case in §10 and clearly identifies synthetic content.
+- [x] A2: Repeating its project ID, including after a human edit, conflicts without changing any existing row.
+- [x] A3: Invalid manifests and injected mid-import failures leave no partial project.
+- [x] A4: The fixture includes every retrieval case in §10 and clearly identifies synthetic content.
 
 ## 15. Test plan
 
@@ -172,11 +218,11 @@ the webhook → REQUIRES → idempotency relationship.
 
 ## 16. Implementation plan
 
-- [ ] Finish the manifest schema, key/path rules, input bounds, fixture, and field-level error contract; review against foundation before coding.
-- [ ] Implement parse/validate/key resolution with unit tests for A3/A4.
-- [ ] Implement one atomic import and repeat-conflict handling; verify A1/A2/A3 against PostgreSQL.
-- [ ] Add the labeled demo manifest, CLI, and setup documentation; verify A4 and the manual flow.
-- [ ] Run relevant tests/typecheck/lint/format checks; update this spec and commit/push the verified feature in its implementation session.
+- [x] Finish the manifest schema, key/path rules, input bounds, fixture, and field-level error contract; review against foundation before coding.
+- [x] Implement parse/validate/key resolution with unit tests for A3/A4.
+- [x] Implement one atomic import and repeat-conflict handling; verify A1/A2/A3 against PostgreSQL.
+- [x] Add the labeled demo manifest, CLI, and setup documentation; verify A4 and the manual flow.
+- [x] Run relevant tests/typecheck/lint/format checks; update this spec and commit/push the verified feature in its implementation session.
 
 ## 17. Alternatives considered
 
@@ -197,7 +243,11 @@ Choose an explicit existing-project conflict; no import-state infrastructure.
 
 ## 18. Durable context created by this feature
 
-Planned: prepared input is intentionally narrower than repository discovery;
+Implemented: prepared input is intentionally narrower than repository discovery;
 synthetic claims are not observations about the actual codebase; repeat imports
 cannot replace reviewed context. Ingestion owns fixture keys/evidence, while the
-compiler owns relevance evaluation. No ingestion behavior exists yet.
+compiler owns relevance evaluation. Version 1 uses duplicate-aware JSON parsing,
+shared foundation preflight before transactions, a raw-byte SHA-256 evidence pin,
+and an explicit conflict on repeat. The bundled fixture imports 29 nodes and 34
+edges with three immutable sources; 34 unit and 21 real-PostgreSQL integration
+tests passed on 2026-09-19.

@@ -1,0 +1,457 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101",
+    "name": "Demo Payments Platform (synthetic)"
+  },
+  "sources": [
+    {
+      "key": "source.repository",
+      "kind": "repository",
+      "uri": "repo://demo-payments/",
+      "label": "Synthetic repository manifest",
+      "excerpt": "synthetic prepared example: declared component and file structure for the demo payments repository",
+      "actorLabel": "prepared-importer"
+    },
+    {
+      "key": "source.curator",
+      "kind": "manual",
+      "uri": "manual://demo-payments/curator-notes",
+      "label": "Demo curator notes",
+      "excerpt": "synthetic prepared example: human-curated architecture, constraints, decisions, and distractor context",
+      "actorLabel": "demo-curator"
+    },
+    {
+      "key": "source.agent",
+      "kind": "agent",
+      "uri": "agent://demo-payments/analysis",
+      "label": "Example agent analysis",
+      "excerpt": "synthetic prepared example: unreviewed agent observations and assumptions for authority comparison",
+      "actorLabel": "demo-analysis-agent"
+    }
+  ],
+  "components": [
+    {
+      "key": "component.backend",
+      "title": "Backend",
+      "content": "Node.js application services for the synthetic commerce platform.",
+      "summary": "Application backend.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository"
+    },
+    {
+      "key": "component.payments",
+      "title": "Payments",
+      "content": "Payment state, provider integrations, and settlement workflows.",
+      "summary": "Payment domain.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.stripe-webhooks",
+      "title": "Stripe Webhook Processing",
+      "content": "Receives Stripe event deliveries at /api/webhooks/stripe and dispatches payment side effects.",
+      "summary": "Stripe event intake and dispatch.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.payments"
+    },
+    {
+      "key": "component.event-receipt-store",
+      "title": "Provider Event Receipt Store",
+      "content": "PostgreSQL-backed receipt ledger used to claim a provider event identifier before business mutations run.",
+      "summary": "Durable receipt ledger.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.payments"
+    },
+    {
+      "key": "component.catalog",
+      "title": "Product Catalog",
+      "content": "Product descriptions, variants, and merchandising data.",
+      "summary": "Catalog domain.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.search",
+      "title": "Catalog Search",
+      "content": "Indexes products and serves shopper search queries.",
+      "summary": "Search domain.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.email",
+      "title": "Transactional Email",
+      "content": "Renders and sends customer email notifications.",
+      "summary": "Email delivery.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.analytics",
+      "title": "Analytics Pipeline",
+      "content": "Collects product and checkout analytics events.",
+      "summary": "Analytics ingestion.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.admin",
+      "title": "Admin Console",
+      "content": "Internal product and account management tools.",
+      "summary": "Administrative UI backend.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    },
+    {
+      "key": "component.tax",
+      "title": "Tax Calculation",
+      "content": "Calculates jurisdiction-specific estimated tax during checkout.",
+      "summary": "Tax estimates.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.backend"
+    }
+  ],
+  "files": [
+    {
+      "key": "file.webhook-handler",
+      "path": "src/payments/webhook.ts",
+      "title": "Stripe webhook handler",
+      "content": "HTTP handler verifies the Stripe signature, parses the event, and calls payment mutation services.",
+      "summary": "Stripe webhook entry point.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.stripe-webhooks"
+    },
+    {
+      "key": "file.event-receipts",
+      "path": "src/payments/event-receipts.ts",
+      "title": "Event receipt repository",
+      "content": "Repository inserts provider event identifiers into PostgreSQL using a unique key and reports whether this worker acquired the event.",
+      "summary": "Durable event claim implementation.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.event-receipt-store"
+    },
+    {
+      "key": "file.payment-service",
+      "path": "src/payments/payment-service.ts",
+      "title": "Payment service",
+      "content": "Creates and updates payment state after provider events are accepted.",
+      "summary": "Payment state mutations.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.payments"
+    },
+    {
+      "key": "file.catalog-indexer",
+      "path": "src/catalog/indexer.ts",
+      "title": "Catalog indexer",
+      "content": "Publishes catalog documents to the search index.",
+      "summary": "Catalog indexing.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.catalog"
+    },
+    {
+      "key": "file.email-renderer",
+      "path": "src/email/render.ts",
+      "title": "Email renderer",
+      "content": "Renders customer notification templates.",
+      "summary": "Email templates.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.email"
+    },
+    {
+      "key": "file.analytics-consumer",
+      "path": "src/analytics/consumer.ts",
+      "title": "Analytics consumer",
+      "content": "Batches anonymous product analytics into the warehouse.",
+      "summary": "Analytics batching.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.analytics"
+    },
+    {
+      "key": "file.tax-rules",
+      "path": "src/tax/rules.ts",
+      "title": "Tax rules",
+      "content": "Looks up jurisdictional tax rates for checkout estimates.",
+      "summary": "Tax rule lookup.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.tax"
+    }
+  ],
+  "claims": [
+    {
+      "key": "bug.repeated-delivery-side-effects",
+      "type": "bug",
+      "title": "Repeated provider delivery can apply a payment mutation twice",
+      "content": "When the same signed provider event arrives on two workers at nearly the same time, both workers can reach the payment mutation before the existing receipt check completes. A customer-visible payment transition may therefore be applied twice.",
+      "summary": "Concurrent redelivery can duplicate a payment side effect.",
+      "importance": 5,
+      "confidence": 0.86,
+      "sourceKey": "source.agent",
+      "changeReason": "Example unreviewed agent finding"
+    },
+    {
+      "key": "constraint.provider-event-id-unique",
+      "type": "constraint",
+      "title": "A provider event ID may produce side effects once",
+      "content": "For a Stripe event identifier, at most one worker may execute customer-visible payment mutations. Retries and parallel deliveries must observe the durable claim and return success without repeating the mutation.",
+      "summary": "Provider event IDs must be idempotent.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Curated payment correctness constraint"
+    },
+    {
+      "key": "decision.record-before-side-effects",
+      "type": "decision",
+      "title": "Claim the event record before payment side effects",
+      "content": "Insert the provider event ID into PostgreSQL in a transaction before creating or updating payment state. A unique-key conflict means another worker owns or completed the event, so acknowledge the delivery without running the side effect.",
+      "summary": "Use a durable pre-effect event claim.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Curated idempotency decision"
+    },
+    {
+      "key": "assumption.process-memory-dedupe",
+      "type": "assumption",
+      "title": "An in-memory seen-event set might be sufficient",
+      "content": "The analysis agent assumed one long-running webhook process receives all retries and suggested remembering identifiers in process memory.",
+      "summary": "Unreviewed single-process assumption.",
+      "importance": 3,
+      "confidence": 0.25,
+      "sourceKey": "source.agent",
+      "changeReason": "Example weak competing assumption"
+    },
+    {
+      "key": "discovery.receipt-claim-result",
+      "type": "discovery",
+      "title": "Receipt insertion already reports ownership",
+      "content": "The event receipt repository returns acquired=false when its unique insert loses a race, providing the control-flow signal the handler needs without inspecting payment rows.",
+      "summary": "Receipt insert result identifies the winning worker.",
+      "importance": 4,
+      "confidence": 0.95,
+      "sourceKey": "source.agent",
+      "changeReason": "Example agent code observation"
+    },
+    {
+      "key": "constraint.webhook-audit-retention",
+      "type": "constraint",
+      "title": "Webhook receipts and audit metadata have retention requirements",
+      "content": "Provider event receipts are operational records, not a transient cache. Keep the event identifier, provider creation timestamp, first-received timestamp, processing outcome, and a non-sensitive failure category for ninety days so support can explain retried deliveries and reconciliation jobs can prove whether an event was claimed. Do not store the complete provider payload in the receipt row because it may contain customer data. Cleanup must run in bounded batches, must never remove records newer than ninety days, and must not race active processing. A cleanup failure must not block webhook handling. This retention rule matters when changing the receipt schema, but the duplicate-processing fix should not add a new cleanup service or broaden payload storage.",
+      "summary": "Keep minimal receipt audit metadata for 90 days without retaining payloads.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Curated operational constraint"
+    },
+    {
+      "key": "decision.catalog-reindex-nightly",
+      "type": "decision",
+      "title": "Rebuild the catalog search index nightly",
+      "content": "The catalog index is rebuilt nightly and receives incremental product updates during the day.",
+      "summary": "Nightly catalog reindex.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Unrelated canonical distractor"
+    },
+    {
+      "key": "constraint.email-brand-colors",
+      "type": "constraint",
+      "title": "Receipt email uses approved brand colors",
+      "content": "Transactional email templates use the approved accessible brand palette.",
+      "summary": "Email palette constraint.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Unrelated canonical distractor"
+    },
+    {
+      "key": "decision.analytics-batch-size",
+      "type": "decision",
+      "title": "Analytics batches contain 500 events",
+      "content": "The analytics consumer flushes after 500 product events or thirty seconds.",
+      "summary": "Analytics batch policy.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Unrelated canonical distractor"
+    },
+    {
+      "key": "constraint.admin-session-timeout",
+      "type": "constraint",
+      "title": "Admin sessions expire after thirty minutes",
+      "content": "Inactive admin console sessions expire after thirty minutes.",
+      "summary": "Admin timeout.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Unrelated high-authority distractor"
+    },
+    {
+      "key": "decision.tax-rates-daily",
+      "type": "decision",
+      "title": "Refresh tax rates daily",
+      "content": "Jurisdiction tax rates are refreshed from the prepared table once per day.",
+      "summary": "Daily tax refresh.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.curator",
+      "changeReason": "Unrelated canonical distractor"
+    },
+    {
+      "key": "assumption.search-synonyms",
+      "type": "assumption",
+      "title": "Search synonyms cover plural product names",
+      "content": "An agent assumes the current synonym list covers plural product searches.",
+      "summary": "Unreviewed search assumption.",
+      "importance": 2,
+      "confidence": 0.4,
+      "sourceKey": "source.agent",
+      "changeReason": "Unrelated inferred distractor"
+    }
+  ],
+  "edges": [
+    {
+      "fromKey": "file.webhook-handler",
+      "toKey": "component.stripe-webhooks",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "file.event-receipts",
+      "toKey": "component.event-receipt-store",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "component.stripe-webhooks",
+      "toKey": "constraint.provider-event-id-unique",
+      "type": "REQUIRES",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "component.stripe-webhooks",
+      "toKey": "component.event-receipt-store",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "decision.record-before-side-effects",
+      "toKey": "constraint.provider-event-id-unique",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "file.event-receipts",
+      "toKey": "decision.record-before-side-effects",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "bug.repeated-delivery-side-effects",
+      "toKey": "component.stripe-webhooks",
+      "type": "AFFECTS",
+      "sourceKey": "source.agent"
+    },
+    {
+      "fromKey": "bug.repeated-delivery-side-effects",
+      "toKey": "assumption.process-memory-dedupe",
+      "type": "CAUSED_BY",
+      "sourceKey": "source.agent"
+    },
+    {
+      "fromKey": "discovery.receipt-claim-result",
+      "toKey": "file.event-receipts",
+      "type": "RELATED_TO",
+      "sourceKey": "source.agent"
+    },
+    {
+      "fromKey": "decision.record-before-side-effects",
+      "toKey": "discovery.receipt-claim-result",
+      "type": "RELATED_TO",
+      "sourceKey": "source.agent"
+    },
+    {
+      "fromKey": "constraint.webhook-audit-retention",
+      "toKey": "component.event-receipt-store",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "file.payment-service",
+      "toKey": "component.payments",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "decision.catalog-reindex-nightly",
+      "toKey": "component.search",
+      "type": "AFFECTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "constraint.email-brand-colors",
+      "toKey": "component.email",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "decision.analytics-batch-size",
+      "toKey": "component.analytics",
+      "type": "AFFECTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "constraint.admin-session-timeout",
+      "toKey": "component.admin",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "decision.tax-rates-daily",
+      "toKey": "component.tax",
+      "type": "AFFECTS",
+      "sourceKey": "source.curator"
+    },
+    {
+      "fromKey": "assumption.search-synonyms",
+      "toKey": "component.search",
+      "type": "RELATED_TO",
+      "sourceKey": "source.agent"
+    }
+  ]
+}

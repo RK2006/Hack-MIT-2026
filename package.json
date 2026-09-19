@@ -14,10 +14,12 @@
     "test": "vitest run --exclude '**/*.integration.test.ts'",
     "test:integration": "vitest run .integration.test.ts",
     "db:migrate": "tsx src/server/db/migrate-cli.ts",
-    "context:smoke": "tsx scripts/context-smoke.ts"
+    "context:smoke": "tsx scripts/context-smoke.ts",
+    "import:demo": "tsx scripts/import-demo.ts"
   },
   "dependencies": {
     "dotenv": "^18.0.1",
+    "json-dup-key-validator": "^1.0.3",
     "pg": "^8.23.0",
     "zod": "^4.6.5"
   },

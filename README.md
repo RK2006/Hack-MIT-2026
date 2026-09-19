@@ -35,3 +35,14 @@ npm run context:smoke
 Integration tests use a real PostgreSQL database and create a unique schema per
 test. They drop only those test-owned schemas. The smoke command creates labeled
 synthetic data; it does not reset or delete existing projects.
+
+## Import the demo project
+
+With `DATABASE_URL` configured and migrations applied:
+
+```bash
+npm run import:demo
+```
+
+The command imports the fixed, clearly labeled synthetic payments manifest once.
+Running it again returns a conflict and never overwrites reviewed project context.
