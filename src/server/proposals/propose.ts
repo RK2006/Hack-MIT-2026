@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { GraphError, graphError } from '../context/errors';
 import type { EdgeType, GraphStore, NodeType } from '../context/types';
 import type { ProposalModel } from './model';
-import { buildProposalPrompt, parseModelProposal, PROPOSAL_LIMITS } from './prompt';
+import { buildProposalPrompt, normalizeKey, parseModelProposal, PROPOSAL_LIMITS } from './prompt';
 
 export type { ProposalModel } from './model';
 
@@ -135,8 +135,14 @@ export async function proposeContext(
     const seen = new Set<string>();
     for (const edge of proposal.edges) {
       const ref = `${edge.fromKey} ${edge.type} ${edge.toKey}`;
-      const from = proposedIds.get(edge.fromKey) ?? existingByKey.get(edge.fromKey);
-      const to = proposedIds.get(edge.toKey) ?? existingByKey.get(edge.toKey);
+      // Models sometimes cite their own node as `type.slug`; fall back to the normalized slug.
+      const resolve = (key: string) =>
+        proposedIds.get(key) ??
+        existingByKey.get(key) ??
+        proposedIds.get(normalizeKey(key)) ??
+        proposedIds.get(normalizeKey(key.replace(/^[a-z]+\./, '')));
+      const from = resolve(edge.fromKey);
+      const to = resolve(edge.toKey);
       if (!from || !to) {
         dropped.push({ kind: 'edge', reason: 'unresolved endpoint key', ref });
         continue;
@@ -145,7 +151,8 @@ export async function proposeContext(
         dropped.push({ kind: 'edge', reason: 'self edge', ref });
         continue;
       }
-      if (!proposedIds.has(edge.fromKey) && !proposedIds.has(edge.toKey)) {
+      const proposedValues = new Set(proposedIds.values());
+      if (!proposedValues.has(from) && !proposedValues.has(to)) {
         dropped.push({ kind: 'edge', reason: 'edge must touch a proposed node', ref });
         continue;
       }

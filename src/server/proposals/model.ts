@@ -14,7 +14,7 @@ export type ProposalProvider = (typeof PROPOSAL_PROVIDERS)[number];
 export const DEFAULT_MODELS: Record<ProposalProvider, string> = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-4.1-mini',
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-flash-latest',
 };
 /** @deprecated kept for callers that imported the old constant */
 export const ANTHROPIC_DEFAULT_MODEL = DEFAULT_MODELS.anthropic;
@@ -68,9 +68,13 @@ function vendorModel(
         if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
       }
       if (!response || !response.ok) {
+        // Vendor error bodies name the model/quota problem; they never echo the API key.
+        const detail = response ? await vendorErrorMessage(response) : undefined;
         throw graphError('MODEL_UNAVAILABLE', 'Proposal model request failed', {
           provider,
+          model,
           category: response ? `http_${response.status}` : 'network',
+          ...(detail && { detail }),
         });
       }
       const text = vendor.extractText(await response.json());
@@ -79,6 +83,16 @@ function vendorModel(
       return text;
     },
   };
+}
+
+async function vendorErrorMessage(response: Response): Promise<string | undefined> {
+  try {
+    const body = (await response.json()) as { error?: { message?: string } | string };
+    const message = typeof body.error === 'string' ? body.error : body.error?.message;
+    return message ? Array.from(message).slice(0, 300).join('') : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Anthropic Messages API; only operator-supplied text and node titles/keys are sent. */

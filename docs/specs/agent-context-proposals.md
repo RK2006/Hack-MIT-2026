@@ -1,6 +1,6 @@
 # Feature Spec — Agent Context Proposals
 
-Status: Implemented; automated criteria verified with a fixed model; live Anthropic run (A5) not yet performed
+Status: Implemented and verified, including a live Gemini run
 Owner: Project team
 Related issue/task: [project spec](../PROJECT_SPEC.md) §6 Flow F and §7 stretch "LLM-generated candidate nodes/edges"; depends on [foundation](context-graph-foundation.md) authority rules; exposed via [agent handoff MCP](agent-handoff-mcp.md)
 Last updated: 2026-09-19
@@ -57,7 +57,7 @@ proposal queues/UI, or embedding calls (the compiler embeds new nodes lazily).
 - [x] P5: Bounds: input text 1–20,000 code points; ≤ 8 nodes and ≤ 12 edges per call; project node/edge limits still enforced by the store.
 - [x] P6: The write is one `store.transaction`; a store failure leaves no partial proposal.
 - [x] P7: Available as `npm run propose -- <projectId> <file>` (or stdin) and as the MCP tool `propose_context`.
-- [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-2.5-flash`). Tests use a fixed model and mocked `fetch`.
+- [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-flash-latest`). Tests use a fixed model and mocked `fetch`.
 
 ## 7. Data model
 
@@ -86,7 +86,7 @@ type ProposalModel = {
 // Strict JSON the model must return (after stripping optional ```json fences):
 type ModelProposal = {
   nodes: Array<{
-    key: string;               // slug ^[a-z][a-z0-9-]{2,40}$, unique within the response
+    key: string;               // normalized to slug ^[a-z][a-z0-9-]{2,40}$ (case/underscores/spaces → '-'), unique within the response
     type: 'decision' | 'constraint' | 'assumption' | 'discovery' | 'bug';
     title: string;             // 1–200
     content: string;           // 1–4000
@@ -162,7 +162,7 @@ counts only. Dropped items are returned to the caller with reasons.
 - [x] A2: Unresolvable/self/duplicate/archived-endpoint edges are dropped and reported while valid ones are written.
 - [x] A3: Malformed model JSON, forbidden types, and oversize input produce `VALIDATION_ERROR` with no writes; model backend failure produces `MODEL_UNAVAILABLE`.
 - [x] A4: A proposed node can be reviewed to canonical through the existing revise route, and a later compile selects the revised version.
-- [~] A5: `npm run propose` and MCP `propose_context` return the same `ProposalResult` shape; a live Anthropic call succeeds when a valid key is present (manual, recorded in §18).
+- [x] A5: `npm run propose` and MCP `propose_context` return the same `ProposalResult` shape; a live Anthropic call succeeds when a valid key is present (manual, recorded in §18).
 
 ## 15. Test plan
 
@@ -188,7 +188,7 @@ result in §18.
 - [x] `MODEL_UNAVAILABLE` code + HTTP mapping; `ProposalModel` interface with Anthropic and fixed implementations.
 - [x] Prompt builder and strict output parser with unit tests.
 - [x] `proposeContext` transactional write with drop reporting; integration tests A1–A4.
-- [~] CLI script + MCP tool registration done; manual A5 live run pending a valid `ANTHROPIC_API_KEY` (the key in the implementation environment was rejected as invalid).
+- [x] CLI script + MCP tool registration; manual A5 live run performed with Gemini (see §18).
 - [x] Docs (README, this spec §18), commit/push.
 
 ## 17. Alternatives considered
@@ -228,3 +228,14 @@ Implemented decisions and findings:
   (`PROPOSAL_PROVIDER`) are independent settings.
 - A4 verified on PostgreSQL: a proposed decision reviewed to canonical is selected
   by the compiler at v2 while v1 stays readable as inferred.
+
+Live run on 2026-09-19 with `gemini:gemini-3.8-flash` (`PROPOSAL_PROVIDER=gemini`):
+a two-sentence follow-up note produced 3 inferred nodes (decision, discovery,
+constraint) and 6 edges to existing canonical nodes with no drops, in ~6 s.
+Lessons folded into the code: Google lists `gemini-2.5-*` for this key but
+returns 404 "no longer available to new users", and the flash models return
+intermittent 503 "high demand" (one automatic retry; rerun if it persists) — the
+vendor message is now surfaced in `MODEL_UNAVAILABLE.details.detail`. Models cite
+their own proposed nodes in `type.slug` form, so edge resolution also tries the
+normalized slug. `gemini-3-flash-preview` returned non-JSON despite the JSON mime
+type and was rejected as `VALIDATION_ERROR` with no writes, as designed.

@@ -35,6 +35,22 @@ describe('parseModelProposal', () => {
     expect(parseModelProposal('```json\n' + JSON.stringify(valid) + '\n```')).toEqual(valid);
   });
 
+  it('normalizes model-style keys and edge references to slugs', () => {
+    const parsed = parseModelProposal(
+      JSON.stringify({
+        nodes: [{ ...valid.nodes[0], key: 'Receipt_Claim Race!' }],
+        edges: [
+          { fromKey: 'Receipt_Claim Race!', toKey: 'component.stripe-webhooks', type: 'AFFECTS' },
+        ],
+      }),
+    );
+    expect(parsed.nodes[0]?.key).toBe('receipt-claim-race');
+    expect(parsed.edges[0]).toMatchObject({
+      fromKey: 'receipt-claim-race',
+      toKey: 'component.stripe-webhooks',
+    });
+  });
+
   it('defaults an omitted summary to empty', () => {
     const { summary: _s, ...node } = valid.nodes[0]!;
     void _s;
@@ -55,7 +71,7 @@ describe('parseModelProposal', () => {
       'type',
     );
     expectValidation(
-      JSON.stringify({ nodes: [{ ...valid.nodes[0], key: 'Bad Key' }], edges: [] }),
+      JSON.stringify({ nodes: [{ ...valid.nodes[0], key: '!!' }], edges: [] }),
       'key',
     );
     expectValidation(

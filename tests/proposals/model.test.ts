@@ -126,6 +126,7 @@ describe('anthropicProposalModel', () => {
       'anthropic:claude-sonnet-4-5',
     );
     expect(proposalModelFromEnv({ OPENAI_API_KEY: 'k' })?.id).toBe('openai:gpt-4.1-mini');
+    expect(proposalModelFromEnv({ GEMINI_API_KEY: 'k' })?.id).toBe('gemini:gemini-flash-latest');
     expect(proposalModelFromEnv({ GEMINI_API_KEY: 'k', PROPOSAL_MODEL: 'gemini-x' })?.id).toBe(
       'gemini:gemini-x',
     );

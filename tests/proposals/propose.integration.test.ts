@@ -63,7 +63,11 @@ const proposalJson = JSON.stringify({
       toKey: 'constraint.provider-event-id-unique',
       type: 'IMPLEMENTS',
     },
-    { fromKey: 'claim-before-charge', toKey: 'retry-storm-discovery', type: 'RELATED_TO' },
+    {
+      fromKey: 'claim-before-charge',
+      toKey: 'discovery.retry-storm-discovery',
+      type: 'RELATED_TO',
+    },
     { fromKey: 'claim-before-charge', toKey: 'no.such.key', type: 'RELATED_TO' },
     { fromKey: 'claim-before-charge', toKey: 'claim-before-charge', type: 'RELATED_TO' },
     { fromKey: 'component.payments', toKey: 'component.stripe-webhooks', type: 'RELATED_TO' },
@@ -99,7 +103,7 @@ describe('agent context proposals against PostgreSQL', () => {
     expect(result.created.edges.map((e) => `${e.from} ${e.type} ${e.to}`)).toEqual([
       'retry-storm-discovery AFFECTS component.stripe-webhooks',
       'claim-before-charge IMPLEMENTS constraint.provider-event-id-unique',
-      'claim-before-charge RELATED_TO retry-storm-discovery',
+      'claim-before-charge RELATED_TO discovery.retry-storm-discovery',
     ]);
     expect(result.dropped.map((d) => d.reason).sort()).toEqual(
       [

@@ -30,13 +30,32 @@ export const PROPOSAL_EDGE_TYPES = [
 
 const slug = z.string().regex(/^[a-z][a-z0-9-]{2,40}$/);
 
+/** Models often emit `Snake_Case` or dotted keys; normalize to the slug form instead of rejecting. */
+export function normalizeKey(raw: string): string {
+  const cleaned = raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 41);
+  return /^[a-z]/.test(cleaned) ? cleaned : `k-${cleaned}`.slice(0, 41);
+}
+
+/** Edge endpoints may be proposed keys (normalized) or existing external keys (kept verbatim). */
+function normalizeRef(raw: string): string {
+  const trimmed = raw.trim();
+  return /^[a-z][a-z0-9._-]*$/.test(trimmed) && trimmed.includes('.')
+    ? trimmed
+    : normalizeKey(trimmed);
+}
+
 export const modelProposalSchema = z
   .object({
     nodes: z
       .array(
         z
           .object({
-            key: slug,
+            key: z.string().transform(normalizeKey).pipe(slug),
             type: z.enum(PROPOSAL_NODE_TYPES),
             title: z.string().trim().min(1).max(200),
             content: z.string().trim().min(1).max(4000),
@@ -50,7 +69,11 @@ export const modelProposalSchema = z
     edges: z
       .array(
         z
-          .object({ fromKey: z.string(), toKey: z.string(), type: z.enum(PROPOSAL_EDGE_TYPES) })
+          .object({
+            fromKey: z.string().transform(normalizeRef),
+            toKey: z.string().transform(normalizeRef),
+            type: z.enum(PROPOSAL_EDGE_TYPES),
+          })
           .strict(),
       )
       .max(PROPOSAL_LIMITS.maxEdges),
