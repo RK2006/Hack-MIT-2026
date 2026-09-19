@@ -1,6 +1,6 @@
 # Feature Spec — Graph Workbench and Context Review
 
-Status: Implemented; automated checks verified, browser checklist documented for the operator
+Status: Implemented; graph interaction/readability enhancement in progress
 Owner: Project team
 Related issue/task: [MVP plan](../MVP_PLAN.md); [foundation](context-graph-foundation.md), [ingestion](prepared-project-ingestion.md), [compiler](task-context-compiler.md)
 Last updated: 2026-09-19
@@ -36,10 +36,12 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
 1. `/` lists projects; choosing one opens `/projects/<projectId>`.
 2. The project page has three regions: graph/list (left), detail panel (right),
    task panel (bottom of the right column, collapsible). The graph is an SVG with
-   a deterministic in-app force layout; nodes are colored by type, dashed outline
-   for inferred, and edges are directed arrows labeled by type (dashed when
-   inferred). A "List" toggle shows the same nodes as a table filterable by type
-   and text, so the graph is never the only navigation.
+   a deterministic in-app force layout with collision-aware spacing. Nodes render
+   as compact cards with wrapped titles, are colored by type, and use a dashed
+   outline for inferred context. Users can drag cards to refine the transient
+   layout and reset them to the deterministic layout. Edges are directed arrows
+   labeled by type (dashed when inferred). A "List" toggle shows the same nodes as
+   a table filterable by type and text, so the graph is never the only navigation.
 3. Clicking a node shows: title, type, authority label, importance, confidence,
    version, actor/reason, external key/path, content, summary; relationships as
    directed sentences ("this node → REQUIRES → Idempotency (canonical)"); the
@@ -83,6 +85,10 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       show counted tokens/omissions/degraded status, and copy context text exactly.
 - [x] W7: Preserve editable user input on failures; avoid displaying a previous
       successful bundle as if it belonged to a failed or still-running request.
+- [~] W8: Keep active graph nodes and their title text visually distinct at the
+      default layout, allow pointer dragging without accidental selection, and
+      provide a reset to the deterministic layout. Dragged positions are transient.
+      Geometry and build checks pass; browser interaction verification remains open.
 
 ## 7. Data model
 
@@ -90,6 +96,7 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
 
 None. Graph layout, selected node, draft form, selected history versions, and
 current bundle are transient UI state. No browser-only copy of canonical knowledge.
+Dragged node positions intentionally reset on reload or graph mutation.
 
 ### Changed entities
 
@@ -208,6 +215,9 @@ selection reasons. No source text or secrets in request logs.
       Route/contract behavior is automated; visual rendering and clipboard behavior
       remain part of the browser checklist.
 - [ ] A5: The complete demo in the MVP plan succeeds, including a history change and subsequent current-context retrieval.
+- [ ] A6: At the default demo viewport, node cards do not overlap, titles remain
+      inside their cards, dragging a node updates its incident edges, and Reset
+      layout restores deterministic positions.
 
 ## 15. Test plan
 
@@ -215,6 +225,8 @@ selection reasons. No source text or secrets in request logs.
 
 - A3: `tests/workbench/compare.test.ts` — snapshot comparison across every field.
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
+- A6: `tests/workbench/layout.test.ts` — collision spacing, bounds, deterministic
+  reset coordinates, title wrapping/truncation, and rectangle-edge intersections.
 - §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
@@ -246,6 +258,9 @@ selection reasons. No source text or secrets in request logs.
 8. Archive a distractor node; graph hides it; Archived tab shows it; restore.
 9. Run `npm run build`, `npm test`, `npm run test:integration`, `npm run typecheck`,
    `npm run lint`, `npm run format:check`.
+10. In Graph view, confirm no default node/title overlap; drag nodes from both mouse
+    and touch input, confirm incident arrows follow, then Reset layout and confirm
+    the original arrangement returns without selecting a node during a drag.
 
 ## 16. Implementation plan
 
@@ -255,6 +270,8 @@ selection reasons. No source text or secrets in request logs.
 - [~] Integrate task panel against `ContextBundle`; route/contract verification passes,
       but A4 panel rendering and clipboard verification remain in the browser checklist.
 - [~] Execute the manual demo checklist (A5): API-level run of steps 1–7 verified over HTTP on 2026-09-19; browser walkthrough is the operator's final check. All automated checks pass; durable context updated; committed.
+- [~] Add collision-aware card layout, wrapped labels, pointer dragging, and reset;
+      verify layout geometry automatically and complete browser interaction check (A6).
 
 ## 17. Alternatives considered
 
@@ -272,6 +289,12 @@ A ~100-line deterministic force layout in SVG is sufficient and fully testable.
 
 Would require edge mutation/history and layout persistence. A read graph with
 small node forms proves inspection/review without those dependencies.
+
+### Persist dragged coordinates
+
+Persistence would require a new user-layout model and mutation API for presentation
+state that is not canonical project knowledge. For the MVP, dragging is local UI
+state and Reset/reload returns to the deterministic graph.
 
 ## 18. Durable context created by this feature
 
@@ -307,6 +330,12 @@ Findings from the read/edit/history slice:
   by sorted node IDs; node/edge order does not change positions. Edges touching an
   archived node are not returned by `getGraph`, so an archived node's detail shows no
   relationships until it is restored.
+- Graph nodes are fixed-size SVG cards with two bounded title lines. The force pass
+  resolves card collisions and uses a nearest-slot deterministic grid fallback when
+  a dense graph cannot relax without boundary collisions. Pointer dragging updates
+  only React layout state and incident edge geometry; reset/reload/graph mutation
+  restores the deterministic positions. Edge labels stay quiet until related to the
+  selected node, highlighted by a task path, or hovered, reducing default clutter.
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph
   snapshot so archived nodes open in the same detail/history/restore path.
 

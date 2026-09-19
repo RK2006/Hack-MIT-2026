@@ -173,8 +173,8 @@ export default function Workbench({ projectId }: { projectId: string }) {
           {graph && view === 'graph' ? (
             <>
               <p className="muted">
-                {graph.nodes.length} active nodes · {graph.edges.length} edges · layout is
-                deterministic
+                {graph.nodes.length} active nodes · {graph.edges.length} edges · drag nodes to
+                refine the view
               </p>
               <GraphView
                 nodes={graph.nodes}

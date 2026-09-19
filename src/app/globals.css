@@ -306,24 +306,76 @@ tr.changed {
 .graph-wrap {
   border: 1px solid var(--border);
   background: var(--panel);
-  border-radius: 6px;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.graph-toolbar {
+  min-height: 38px;
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+  background: #f8fafc;
 }
 .graph {
   width: 100%;
   height: auto;
   display: block;
+  background:
+    radial-gradient(circle at center, rgb(148 163 184 / 18%) 1px, transparent 1px) 0 0 / 20px 20px,
+    #fbfdff;
 }
 .graph .node {
-  cursor: pointer;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  filter: drop-shadow(0 2px 3px rgb(15 23 42 / 18%));
+}
+.graph .node:hover .node-card,
+.graph .node:focus-visible .node-card {
+  stroke: #111827;
+}
+.graph .node:active,
+.graph .node-dragging {
+  cursor: grabbing;
 }
 .graph .node-label {
-  font-size: 10px;
-  fill: #222;
+  font-size: 10.5px;
+  font-weight: 650;
+  fill: #fff;
+  letter-spacing: 0.01em;
   pointer-events: none;
 }
-.graph .edge-label {
+.graph .node-type {
   font-size: 8px;
-  fill: #666;
+  font-weight: 700;
+  fill: rgb(255 255 255 / 78%);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+.graph .edge-label-group {
+  opacity: 0.16;
+  transition: opacity 120ms ease;
+  pointer-events: none;
+}
+.graph .edge:hover .edge-label-group,
+.graph .edge-related .edge-label-group {
+  opacity: 0.96;
+}
+.graph .edge-label-group rect {
+  fill: rgb(255 255 255 / 94%);
+  stroke: #cbd5e1;
+  stroke-width: 0.8;
+}
+.graph .edge-label {
+  font-size: 8.5px;
+  font-weight: 650;
+  fill: #475569;
 }
 .graph .edge-inferred .edge-label {
   fill: #a16207;
@@ -578,6 +630,5 @@ tr.changed {
   padding-left: 16px;
 }
 .graph .node:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
 }

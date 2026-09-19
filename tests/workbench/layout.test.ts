@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { isSafeLink, layoutGraph } from '../../src/lib/layout';
+import demo from '../../fixtures/demo-payments.json';
+import {
+  cardsOverlap,
+  GRAPH_NODE_HEIGHT,
+  GRAPH_NODE_WIDTH,
+  isSafeLink,
+  layoutGraph,
+  rectangleBoundaryPoint,
+  wrapGraphTitle,
+} from '../../src/lib/layout';
 
 const nodes = Array.from({ length: 12 }, (_, i) => ({ id: `node-${i}` }));
 const edges = [
@@ -43,9 +52,68 @@ describe('layoutGraph', () => {
     expect(linked).toBeLessThan(Math.max(...unlinked));
   });
 
+  it('keeps card-sized nodes separated inside the canvas', () => {
+    const positions = layoutGraph(nodes, edges, 900, 600);
+    const points = [...positions.entries()];
+    for (const [, { x, y }] of points) {
+      expect(x).toBeGreaterThanOrEqual(GRAPH_NODE_WIDTH / 2);
+      expect(x).toBeLessThanOrEqual(900 - GRAPH_NODE_WIDTH / 2);
+      expect(y).toBeGreaterThanOrEqual(GRAPH_NODE_HEIGHT / 2);
+      expect(y).toBeLessThanOrEqual(600 - GRAPH_NODE_HEIGHT / 2);
+    }
+    for (let i = 0; i < points.length; i += 1) {
+      for (let j = i + 1; j < points.length; j += 1) {
+        expect(cardsOverlap(points[i]![1], points[j]![1])).toBe(false);
+      }
+    }
+  });
+
+  it('keeps every card in the full demo graph separated', () => {
+    const demoNodes = [...demo.components, ...demo.files, ...demo.claims].map(({ key }) => ({
+      id: key,
+    }));
+    const demoEdges = [
+      ...demo.edges.map((edge) => ({ fromNodeId: edge.fromKey, toNodeId: edge.toKey })),
+      ...demo.components.flatMap((node) =>
+        node.parentKey ? [{ fromNodeId: node.parentKey, toNodeId: node.key }] : [],
+      ),
+      ...demo.files.map((node) => ({ fromNodeId: node.componentKey, toNodeId: node.key })),
+    ];
+    const positions = [...layoutGraph(demoNodes, demoEdges, 900, 620).values()];
+    expect(positions).toHaveLength(29);
+    for (let i = 0; i < positions.length; i += 1) {
+      for (let j = i + 1; j < positions.length; j += 1) {
+        expect(cardsOverlap(positions[i]!, positions[j]!)).toBe(false);
+      }
+    }
+  });
+
   it('handles empty and single-node graphs', () => {
     expect(layoutGraph([], [], 900, 600).size).toBe(0);
     expect(layoutGraph([{ id: 'only' }], [], 900, 600).get('only')).toEqual({ x: 450, y: 300 });
+  });
+});
+
+describe('graph card geometry', () => {
+  it('clips horizontal and diagonal edges to the card boundary', () => {
+    expect(rectangleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 100 })).toEqual({
+      x: 100 + GRAPH_NODE_WIDTH / 2,
+      y: 100,
+    });
+    const diagonal = rectangleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 300 });
+    expect(diagonal.y).toBe(100 + GRAPH_NODE_HEIGHT / 2);
+    expect(diagonal.x).toBe(100 + GRAPH_NODE_HEIGHT / 2);
+  });
+
+  it('wraps titles to two bounded lines and marks truncation', () => {
+    expect(wrapGraphTitle('Provider Event Receipt Store', 18, 2)).toEqual([
+      'Provider Event',
+      'Receipt Store',
+    ]);
+    const long = wrapGraphTitle('A provider event ID may produce side effects once', 18, 2);
+    expect(long).toHaveLength(2);
+    expect(long.every((line) => line.length <= 18)).toBe(true);
+    expect(long[1]).toMatch(/…$/);
   });
 });
 
