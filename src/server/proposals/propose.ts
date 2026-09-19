@@ -59,17 +59,19 @@ export async function proposeContext(
     });
   }
   const graph = await deps.store.getGraph(projectId);
-  const raw = await deps.model.complete(
+  const completion = await deps.model.complete(
     buildProposalPrompt(graph, {
       text,
       ...(request.taskHint !== undefined && { taskHint: request.taskHint }),
     }),
   );
-  const proposal = parseModelProposal(raw);
+  // Provenance names the model that actually answered, not merely the configured one.
+  const modelId = completion.model;
+  const proposal = parseModelProposal(completion.text);
   const dropped: ProposalResult['dropped'] = [];
   const empty: ProposalResult = {
     projectId,
-    model: deps.model.id,
+    model: modelId,
     sourceId: null,
     created: { nodes: [], edges: [] },
     dropped,
@@ -83,7 +85,7 @@ export async function proposeContext(
       });
     deps.log?.({
       operation: 'proposeContext',
-      model: deps.model.id,
+      model: modelId,
       durationMs: Date.now() - started,
       created: 0,
       dropped: dropped.length,
@@ -94,20 +96,30 @@ export async function proposeContext(
   const existingByKey = new Map(
     graph.nodes.filter((node) => node.externalKey).map((node) => [node.externalKey!, node.id]),
   );
-  const actor = { kind: 'agent' as const, label: deps.model.id.slice(0, 120) };
-  const excerpt = `[${deps.model.id}] ${Array.from(text).slice(0, PROPOSAL_LIMITS.excerptMax).join('')}`;
+  // Proposed keys arrive slug-normalized, so compare against normalized existing keys.
+  const existingNormalized = new Map(
+    [...existingByKey.keys()].map((key) => [normalizeKey(key), key] as const),
+  );
+  const actor = { kind: 'agent' as const, label: modelId.slice(0, 120) };
+  const excerpt = `[${modelId}] ${Array.from(text).slice(0, PROPOSAL_LIMITS.excerptMax).join('')}`;
 
   const result = await deps.store.transaction(async (tx) => {
     const source = await tx.createSource(projectId, {
       kind: 'agent',
       uri: `agent://proposals/${randomUUID()}`,
-      label: `Agent proposal (${deps.model.id})`.slice(0, 200),
+      label: `Agent proposal (${modelId})`.slice(0, 200),
       excerpt,
       revisionRef: null,
     });
     const created: ProposalResult['created'] = { nodes: [], edges: [] };
     const proposedIds = new Map<string, string>();
     for (const node of proposal.nodes) {
+      // Re-proposing an existing node (repeat runs on the same notes) is a no-op, not a duplicate.
+      const existingKey = existingNormalized.get(node.key);
+      if (existingKey) {
+        dropped.push({ kind: 'node', reason: 'already exists', ref: existingKey });
+        continue;
+      }
       const externalKey = `agent.${node.key}-${randomUUID().slice(0, 8)}`;
       const createdNode = await tx.createNode(projectId, {
         type: node.type,
@@ -197,14 +209,14 @@ export async function proposeContext(
 
   deps.log?.({
     operation: 'proposeContext',
-    model: deps.model.id,
+    model: modelId,
     durationMs: Date.now() - started,
     created: result.created.nodes.length + result.created.edges.length,
     dropped: dropped.length,
   });
   return {
     projectId,
-    model: deps.model.id,
+    model: modelId,
     sourceId: result.sourceId,
     created: result.created,
     dropped,

@@ -134,6 +134,38 @@ describe('agent context proposals against PostgreSQL', () => {
     ).toBe(true);
   });
 
+  it('does not duplicate a node whose key already exists in the graph', async () => {
+    const before = await store.getGraph(DEMO_PROJECT_ID);
+    const again = await proposeContext(
+      {
+        store,
+        model: fixedProposalModel(
+          JSON.stringify({
+            nodes: [
+              {
+                key: 'constraint.provider-event-id-unique',
+                type: 'constraint',
+                title: 'dup',
+                content: 'dup',
+                summary: '',
+                importance: 3,
+                confidence: 0.5,
+              },
+            ],
+            edges: [],
+          }),
+        ),
+      },
+      DEMO_PROJECT_ID,
+      { text },
+    );
+    expect(again.created.nodes).toEqual([]);
+    expect(again.dropped).toEqual([
+      { kind: 'node', reason: 'already exists', ref: 'constraint.provider-event-id-unique' },
+    ]);
+    expect((await store.getGraph(DEMO_PROJECT_ID)).nodes.length).toBe(before.nodes.length);
+  });
+
   it('writes nothing for an empty proposal or invalid model output (A3)', async () => {
     const before = await store.getGraph(DEMO_PROJECT_ID);
     const empty = await proposeContext(

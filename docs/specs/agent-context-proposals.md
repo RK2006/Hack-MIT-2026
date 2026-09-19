@@ -57,7 +57,7 @@ proposal queues/UI, or embedding calls (the compiler embeds new nodes lazily).
 - [x] P5: Bounds: input text 1–20,000 code points; ≤ 8 nodes and ≤ 12 edges per call; project node/edge limits still enforced by the store.
 - [x] P6: The write is one `store.transaction`; a store failure leaves no partial proposal.
 - [x] P7: Available as `npm run propose -- <projectId> <file>` (or stdin) and as the MCP tool `propose_context`.
-- [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-flash-latest`). Tests use a fixed model and mocked `fetch`.
+- [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-flash-latest,gemini-flash-lite-latest`) and may list comma-separated fallbacks; each model gets up to 4 attempts with 1/2/4 s backoff on 429/5xx/network before the next is tried, and provenance records the model that actually answered. Tests use a fixed model and mocked `fetch`.
 
 ## 7. Data model
 

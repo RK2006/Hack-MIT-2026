@@ -4,6 +4,7 @@ import {
   geminiProposalModel,
   openAiProposalModel,
   proposalModelFromEnv,
+  MAX_ATTEMPTS,
 } from '../../src/server/proposals/model';
 
 const prompt = { system: 'sys', user: 'usr' };
@@ -28,7 +29,10 @@ describe('anthropicProposalModel', () => {
       },
     });
     expect(model.id).toBe('anthropic:claude-test');
-    expect(await model.complete(prompt)).toBe('{"nodes":[],"edges":[]}');
+    expect(await model.complete(prompt)).toEqual({
+      text: '{"nodes":[],"edges":[]}',
+      model: 'anthropic:claude-test',
+    });
     const [call] = calls;
     expect(call!.url).toBe('https://api.anthropic.com/v1/messages');
     const headers = call!.init.headers as Record<string, string>;
@@ -42,21 +46,47 @@ describe('anthropicProposalModel', () => {
     });
   });
 
-  it('retries once on 5xx/429 and then fails as MODEL_UNAVAILABLE without leaking the key', async () => {
+  it('retries with backoff on 5xx/429, then fails as MODEL_UNAVAILABLE without leaking the key', async () => {
     let attempts = 0;
+    const sleeps: number[] = [];
     const model = anthropicProposalModel({
       apiKey: 'sk-secret',
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
       fetchImpl: async () => {
         attempts += 1;
-        return jsonResponse(529, { error: 'overloaded' });
+        return jsonResponse(529, { error: { message: 'overloaded' } });
       },
     });
-    await expect(model.complete(prompt)).rejects.toMatchObject({
+    const error = await model.complete(prompt).catch((e) => e);
+    expect(error).toMatchObject({
       code: 'MODEL_UNAVAILABLE',
-      details: { category: 'http_529' },
+      details: { category: 'http_529', detail: 'overloaded', model: 'claude-sonnet-4-5' },
     });
-    expect(attempts).toBe(2);
-  }, 10_000);
+    expect(JSON.stringify(error.details)).not.toContain('sk-secret');
+    expect(attempts).toBe(MAX_ATTEMPTS);
+    expect(sleeps).toEqual([1000, 2000, 4000]);
+  });
+
+  it('falls back to the next model in a comma-separated list and records which one answered', async () => {
+    const calls: string[] = [];
+    const model = geminiProposalModel({
+      apiKey: 'k',
+      model: 'gemini-busy, gemini-spare',
+      sleep: async () => {},
+      fetchImpl: async (url) => {
+        calls.push(String(url));
+        return String(url).includes('gemini-busy')
+          ? jsonResponse(503, { error: { message: 'high demand' } })
+          : jsonResponse(200, { candidates: [{ content: { parts: [{ text: '{}' }] } }] });
+      },
+    });
+    expect(model.id).toBe('gemini:gemini-busy');
+    expect(await model.complete(prompt)).toEqual({ text: '{}', model: 'gemini:gemini-spare' });
+    expect(calls.filter((u) => u.includes('gemini-busy'))).toHaveLength(MAX_ATTEMPTS);
+    expect(calls.filter((u) => u.includes('gemini-spare'))).toHaveLength(1);
+  });
 
   it('does not retry client errors and treats empty content as unavailable', async () => {
     let attempts = 0;
@@ -97,7 +127,7 @@ describe('anthropicProposalModel', () => {
     };
     const openai = openAiProposalModel({ apiKey: 'oa', fetchImpl: capture });
     expect(openai.id).toBe('openai:gpt-4.1-mini');
-    expect(await openai.complete(prompt)).toBe('{"nodes":[],"edges":[]}');
+    expect((await openai.complete(prompt)).text).toBe('{"nodes":[],"edges":[]}');
     expect(seen[0]!.url).toBe('https://api.openai.com/v1/chat/completions');
     expect(seen[0]!.headers.authorization).toBe('Bearer oa');
     expect(seen[0]!.body).toMatchObject({
@@ -109,7 +139,10 @@ describe('anthropicProposalModel', () => {
     });
     const gemini = geminiProposalModel({ apiKey: 'gm', model: 'gemini-test', fetchImpl: capture });
     expect(gemini.id).toBe('gemini:gemini-test');
-    expect(await gemini.complete(prompt)).toBe('{"nodes":[],"edges":[]}');
+    expect(await gemini.complete(prompt)).toEqual({
+      text: '{"nodes":[],"edges":[]}',
+      model: 'gemini:gemini-test',
+    });
     expect(seen[1]!.url).toBe(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent',
     );

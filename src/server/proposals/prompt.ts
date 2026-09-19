@@ -97,6 +97,7 @@ export function buildProposalPrompt(
     'do not restate code line by line; prefer decisions, constraints, discovered facts, and bugs;',
     'keys are lowercase slugs unique in your response; edge endpoints are your keys or existing node keys from the list;',
     'edge direction follows the type: A DEPENDS_ON B, A REQUIRES B, A CONSTRAINS B (A limits B), A IMPLEMENTS B, A AFFECTS B, A CAUSED_BY B (B causes A).',
+    'Never re-propose knowledge that an existing node already states; reference existing nodes only as edge endpoints, using their exact keys.',
     'If nothing durable is present, return {"nodes":[],"edges":[]}.',
   ].join('\n');
   const user = [

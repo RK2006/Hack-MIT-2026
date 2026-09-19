@@ -2,10 +2,16 @@ import { graphError } from '../context/errors';
 
 export type ProposalPrompt = { system: string; user: string };
 
+export type ProposalCompletion = {
+  text: string;
+  /** Model that actually answered, e.g. `gemini:gemini-3.5-flash` (recorded as provenance). */
+  model: string;
+};
+
 export type ProposalModel = {
-  /** Stable id recorded as the agent actor label, e.g. `anthropic:claude-sonnet-4-5`. */
+  /** Configured id, e.g. `gemini:gemini-3.8-flash` (first of any fallback list). */
   id: string;
-  complete(prompt: ProposalPrompt): Promise<string>;
+  complete(prompt: ProposalPrompt): Promise<ProposalCompletion>;
 };
 
 export const PROPOSAL_PROVIDERS = ['anthropic', 'openai', 'gemini'] as const;
@@ -14,15 +20,26 @@ export type ProposalProvider = (typeof PROPOSAL_PROVIDERS)[number];
 export const DEFAULT_MODELS: Record<ProposalProvider, string> = {
   anthropic: 'claude-sonnet-4-5',
   openai: 'gpt-4.1-mini',
-  gemini: 'gemini-flash-latest',
+  gemini: 'gemini-flash-latest,gemini-flash-lite-latest',
 };
 /** @deprecated kept for callers that imported the old constant */
 export const ANTHROPIC_DEFAULT_MODEL = DEFAULT_MODELS.anthropic;
 
 const TIMEOUT_MS = 60_000;
 const MAX_OUTPUT_TOKENS = 4000;
+/** Attempts per model on 429/5xx/network, with exponential backoff (1 s, 2 s, 4 s). */
+export const MAX_ATTEMPTS = 4;
+const BACKOFF_MS = 1000;
 
-type VendorOptions = { apiKey: string; model?: string; baseUrl?: string; fetchImpl?: typeof fetch };
+type VendorOptions = {
+  apiKey: string;
+  /** One model, or several separated by commas: later ones are fallbacks when the earlier are unavailable. */
+  model?: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
+  /** Test seam for the backoff sleep. */
+  sleep?: (ms: number) => Promise<void>;
+};
 
 type Vendor = {
   url: (baseUrl: string | undefined, model: string) => string;
@@ -31,20 +48,29 @@ type Vendor = {
   extractText: (body: unknown) => string;
 };
 
-/** Shared transport: 60 s timeout, one retry on 429/5xx/network, MODEL_UNAVAILABLE on failure. */
+const isRetryable = (status: number) => status === 429 || status >= 500;
+
+/**
+ * Shared transport: 60 s timeout per call; up to MAX_ATTEMPTS per model with exponential backoff on
+ * 429/5xx/network; then the next fallback model. MODEL_UNAVAILABLE when all are exhausted.
+ */
 function vendorModel(
   provider: ProposalProvider,
   vendor: Vendor,
   options: VendorOptions,
 ): ProposalModel {
-  const model = options.model ?? DEFAULT_MODELS[provider];
+  const models = (options.model ?? DEFAULT_MODELS[provider])
+    .split(',')
+    .map((name) => name.trim())
+    .filter(Boolean);
   const fetchImpl = options.fetchImpl ?? fetch;
-  const url = vendor.url(options.baseUrl, model);
-  const request = async (prompt: ProposalPrompt) => {
+  const sleep =
+    options.sleep ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)));
+  const request = async (model: string, prompt: ProposalPrompt) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
     try {
-      return await fetchImpl(url, {
+      return await fetchImpl(vendor.url(options.baseUrl, model), {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...vendor.headers(options.apiKey) },
         body: JSON.stringify(vendor.body(model, prompt)),
@@ -55,32 +81,55 @@ function vendorModel(
     }
   };
   return {
-    id: `${provider}:${model}`,
+    id: `${provider}:${models[0]}`,
     async complete(prompt) {
-      let response: Response | undefined;
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          response = await request(prompt);
-          if (response.ok || (response.status !== 429 && response.status < 500)) break;
-        } catch {
-          response = undefined;
+      const failures: Array<{ model: string; category: string; detail?: string }> = [];
+      for (const model of models) {
+        for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt += 1) {
+          if (attempt > 0) await sleep(BACKOFF_MS * 2 ** (attempt - 1));
+          let response: Response | undefined;
+          try {
+            response = await request(model, prompt);
+          } catch {
+            response = undefined;
+          }
+          if (response?.ok) {
+            const text = vendor.extractText(await response.json());
+            if (!text)
+              throw graphError('MODEL_UNAVAILABLE', 'Proposal model returned no text', {
+                provider,
+                model,
+              });
+            return { text, model: `${provider}:${model}` };
+          }
+          if (response && !isRetryable(response.status)) {
+            // Vendor error bodies name the model/quota problem; they never echo the API key.
+            const detail = await vendorErrorMessage(response);
+            failures.push({
+              model,
+              category: `http_${response.status}`,
+              ...(detail && { detail }),
+            });
+            break;
+          }
+          if (attempt === MAX_ATTEMPTS - 1) {
+            const detail = response ? await vendorErrorMessage(response) : undefined;
+            failures.push({
+              model,
+              category: response ? `http_${response.status}` : 'network',
+              ...(detail && { detail }),
+            });
+          }
         }
-        if (attempt === 0) await new Promise((resolve) => setTimeout(resolve, 1000));
       }
-      if (!response || !response.ok) {
-        // Vendor error bodies name the model/quota problem; they never echo the API key.
-        const detail = response ? await vendorErrorMessage(response) : undefined;
-        throw graphError('MODEL_UNAVAILABLE', 'Proposal model request failed', {
-          provider,
-          model,
-          category: response ? `http_${response.status}` : 'network',
-          ...(detail && { detail }),
-        });
-      }
-      const text = vendor.extractText(await response.json());
-      if (!text)
-        throw graphError('MODEL_UNAVAILABLE', 'Proposal model returned no text', { provider });
-      return text;
+      const last = failures[failures.length - 1];
+      throw graphError('MODEL_UNAVAILABLE', 'Proposal model request failed', {
+        provider,
+        model: last?.model,
+        category: last?.category ?? 'network',
+        ...(last?.detail && { detail: last.detail }),
+        attempts: failures,
+      });
     },
   };
 }
@@ -180,7 +229,10 @@ export function fixedProposalModel(
 ): ProposalModel {
   return {
     id,
-    complete: async (prompt) => (typeof respond === 'string' ? respond : respond(prompt)),
+    complete: async (prompt) => ({
+      text: typeof respond === 'string' ? respond : await respond(prompt),
+      model: id,
+    }),
   };
 }
 

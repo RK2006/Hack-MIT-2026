@@ -75,7 +75,8 @@ Client configuration (Claude Code / Codex style):
 
 With an LLM key in `.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`;
 optional `PROPOSAL_PROVIDER=anthropic|openai|gemini` and `PROPOSAL_MODEL`; defaults
-`claude-sonnet-4-5` / `gpt-4.1-mini` / `gemini-flash-latest`), an agent or operator can turn
+`claude-sonnet-4-5` / `gpt-4.1-mini` / `gemini-flash-latest,gemini-flash-lite-latest`; `PROPOSAL_MODEL` accepts a
+comma-separated fallback list, tried in order when a model is throttled), an agent or operator can turn
 notes/diff summaries into _inferred_ knowledge for review:
 
 ```bash
