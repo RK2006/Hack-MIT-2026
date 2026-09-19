@@ -1,4 +1,5 @@
 AGENTS.md
 CODEX_KICKOFF_PROMPT.md
 docs/**/*.md
-
+.next/
+next-env.d.ts

@@ -144,6 +144,19 @@ async function getNode(
   return mapNode(result.rows[0]);
 }
 
+async function listArchivedNodes(executor: Executor, projectId: string): Promise<ContextNode[]> {
+  await getProject(executor, projectId);
+  const result = await executor.query(
+    `SELECT n.id, n.project_id, n.type, n.external_key, n.path,
+      n.created_at AS node_created_at, r.*, r.created_at AS revision_created_at
+    FROM context_nodes n JOIN LATERAL (
+      SELECT * FROM context_revisions WHERE node_id=n.id ORDER BY version DESC LIMIT 1
+    ) r ON true WHERE n.project_id=$1 AND r.archived ORDER BY n.id`,
+    [projectId],
+  );
+  return result.rows.map(mapNode);
+}
+
 async function getSource(executor: Executor, projectId: string, sourceId: string): Promise<Source> {
   parseUuid(projectId, 'projectId');
   parseUuid(sourceId, 'sourceId');
@@ -223,6 +236,7 @@ function reader(executor: Executor): GraphReader {
     getProject: (id) => getProject(executor, id),
     getGraph: (id) => graphQuery(executor, id),
     getNode: (projectId, nodeId) => getNode(executor, projectId, nodeId),
+    listArchivedNodes: (projectId) => listArchivedNodes(executor, projectId),
     getSource: (projectId, sourceId) => getSource(executor, projectId, sourceId),
     listRevisions: (projectId, nodeId) => listRevisions(executor, projectId, nodeId),
     getRevision: (projectId, nodeId, version) => getRevision(executor, projectId, nodeId, version),
@@ -261,6 +275,8 @@ export function createGraphStore(pool: Pool, options: { logger?: StoreLogger } =
       logged('getProject', () => base.getProject(projectId), { projectId }),
     getNode: (projectId, nodeId) =>
       logged('getNode', () => base.getNode(projectId, nodeId), { projectId, nodeId }),
+    listArchivedNodes: (projectId) =>
+      logged('listArchivedNodes', () => base.listArchivedNodes(projectId), { projectId }),
     getSource: (projectId, sourceId) =>
       logged('getSource', () => base.getSource(projectId, sourceId), { projectId }),
     listRevisions: (projectId, nodeId) =>

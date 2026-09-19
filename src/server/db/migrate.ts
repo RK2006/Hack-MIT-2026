@@ -3,12 +3,15 @@ import type { Pool } from 'pg';
 
 export type Migration = { version: string; sql: string };
 
+const MIGRATION_VERSIONS = ['001_context_graph', '002_context_embeddings'] as const;
+
 export async function productionMigrations(): Promise<Migration[]> {
-  const sql = await readFile(
-    new URL('./migrations/001_context_graph.sql', import.meta.url),
-    'utf8',
+  return Promise.all(
+    MIGRATION_VERSIONS.map(async (version) => ({
+      version,
+      sql: await readFile(new URL(`./migrations/${version}.sql`, import.meta.url), 'utf8'),
+    })),
   );
-  return [{ version: '001_context_graph', sql }];
 }
 
 export async function migrate(pool: Pool, migrations?: Migration[]): Promise<string[]> {

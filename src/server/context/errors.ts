@@ -4,6 +4,7 @@ export type GraphErrorCode =
   | 'CONFLICT'
   | 'AUTHORITY_VIOLATION'
   | 'LIMIT_EXCEEDED'
+  | 'EMBEDDING_UNAVAILABLE'
   | 'STORAGE_ERROR';
 
 export class GraphError extends Error {

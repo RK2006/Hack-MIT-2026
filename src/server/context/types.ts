@@ -111,6 +111,7 @@ export interface GraphReader {
   getProject(projectId: string): Promise<Project>;
   getGraph(projectId: string): Promise<GraphSnapshot>;
   getNode(projectId: string, nodeId: string): Promise<ContextNode>;
+  listArchivedNodes(projectId: string): Promise<ContextNode[]>;
   getSource(projectId: string, sourceId: string): Promise<Source>;
   listRevisions(projectId: string, nodeId: string): Promise<NodeRevision[]>;
   getRevision(projectId: string, nodeId: string, version: number): Promise<NodeRevision>;
