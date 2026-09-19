@@ -240,8 +240,8 @@ selection reasons. No source text or secrets in request logs.
 ## 16. Implementation plan
 
 - [x] Freeze renderer, route payloads, archived-list reader, conflict behavior, and browser acceptance steps (this document).
-- [ ] Add `listArchivedNodes`, runtime store, HTTP helpers, read routes, project list page, graph/list/detail/evidence; verify A1.
-- [ ] Add manual create/edit/review/archive/restore routes + forms and two-revision comparison; verify A2/A3.
+- [x] Add `listArchivedNodes`, runtime store, HTTP helpers, read routes, project list page, graph/list/detail/evidence; verify A1.
+- [x] Add manual create/edit/review/archive/restore routes + forms and two-revision comparison; verify A2/A3.
 - [ ] Integrate task panel against `ContextBundle`; verify A4.
 - [ ] Execute the manual demo checklist (A5), run all checks, update durable context, commit/push.
 
@@ -267,3 +267,34 @@ small node forms proves inspection/review without those dependencies.
 Planned: the UI reads/writes through shared store contracts; node history is not
 whole-graph history; reviewed authority needs a human action; displayed bundles
 are revision-specific snapshots. Findings are recorded after implementation.
+
+Findings from the read/edit/history slice:
+
+- Route files under `src/app/api/**` only bind `await getStore()`; the request logic
+  lives in `src/server/workbench/handlers.ts` as `handleX(store, request, params)`
+  functions so integration tests exercise the exact handlers with a test store and
+  real `Request` objects (`tests/workbench/routes.integration.test.ts`).
+- `src/server/workbench/mutations.ts` validates only the request envelope (shape,
+  enums, direction, `expectedVersion`); field rules (blank title, path form, limits,
+  authority) stay in the foundation parsers inside the store, so both layers report
+  `VALIDATION_ERROR` with `details.issues`. `POST /nodes` answers `201`.
+- A revise request whose snapshot equals the current one returns `changed: false`
+  and records no revision, but its manual source row was already inserted in the
+  same transaction and is kept (harmless orphan; the UI reports "no new revision").
+- Next.js 16 bundling (Turbopack and webpack) does not resolve the `.js`-suffixed
+  relative imports used throughout `src/server/**` to `.ts` files. `next build`/`next dev`
+  need either extensionless imports in `src/server/**` or
+  `experimental.extensionAlias: { '.js': ['.ts', '.tsx', '.js'] }` plus the `--webpack`
+  flag (verified to build). Turbopack also refuses a `node_modules` symlink that points
+  outside the project (worktree setups) unless `turbopack.root` is the common parent.
+- Inside Next, `request.url` is normalized to `http://localhost:<port>/…` even when the
+  browser used `127.0.0.1`, so `assertSameOrigin`'s `Origin === new URL(request.url).origin`
+  fallback rejects `Origin: http://127.0.0.1:3000` requests that lack `Sec-Fetch-Site`.
+  Browsers send `Sec-Fetch-Site: same-origin`, so the UI works; comparing `Origin`
+  against the `Host` header would also accept origin-only tooling.
+- The graph layout is a seeded Fruchterman–Reingold pass (`src/lib/layout.ts`) keyed
+  by sorted node IDs; node/edge order does not change positions. Edges touching an
+  archived node are not returned by `getGraph`, so an archived node's detail shows no
+  relationships until it is restored.
+- The selected node is fetched via `GET /nodes/:id` rather than read from the graph
+  snapshot so archived nodes open in the same detail/history/restore path.
