@@ -32,7 +32,8 @@ const server = createContextGraphMcpServer({
 log({
   server: 'context-graph',
   embeddingModel: provider.id,
-  proposals: proposalModel?.id ?? 'disabled (set ANTHROPIC_API_KEY)',
+  proposals:
+    proposalModel?.id ?? 'disabled (set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY)',
 });
 
 const transport = new StdioServerTransport();

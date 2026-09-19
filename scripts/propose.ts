@@ -18,7 +18,9 @@ if (!projectId) {
 }
 const model = proposalModelFromEnv();
 if (!model) {
-  console.error('ANTHROPIC_API_KEY is required for proposals');
+  console.error(
+    'A proposal model key is required: set ANTHROPIC_API_KEY, OPENAI_API_KEY, or GEMINI_API_KEY (and optionally PROPOSAL_PROVIDER / PROPOSAL_MODEL) in .env',
+  );
   process.exit(2);
 }
 const text = file

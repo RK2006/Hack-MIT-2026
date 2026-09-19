@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { anthropicProposalModel, proposalModelFromEnv } from '../../src/server/proposals/model';
+import {
+  anthropicProposalModel,
+  geminiProposalModel,
+  openAiProposalModel,
+  proposalModelFromEnv,
+} from '../../src/server/proposals/model';
 
 const prompt = { system: 'sys', user: 'usr' };
 const jsonResponse = (status: number, body: unknown) =>
@@ -74,10 +79,64 @@ describe('anthropicProposalModel', () => {
     await expect(empty.complete(prompt)).rejects.toMatchObject({ code: 'MODEL_UNAVAILABLE' });
   });
 
-  it('is disabled without ANTHROPIC_API_KEY and honors ANTHROPIC_MODEL', () => {
-    expect(proposalModelFromEnv({})).toBeUndefined();
-    expect(proposalModelFromEnv({ ANTHROPIC_API_KEY: 'k', ANTHROPIC_MODEL: 'claude-x' })?.id).toBe(
-      'anthropic:claude-x',
+  it('speaks the OpenAI chat and Gemini generateContent shapes', async () => {
+    const seen: Array<{ url: string; body: any; headers: Record<string, string> }> = [];
+    const capture: typeof fetch = async (url, init) => {
+      seen.push({
+        url: String(url),
+        body: JSON.parse(String(init?.body)),
+        headers: init?.headers as Record<string, string>,
+      });
+      return seen.length === 1
+        ? jsonResponse(200, { choices: [{ message: { content: '{"nodes":[],"edges":[]}' } }] })
+        : jsonResponse(200, {
+            candidates: [
+              { content: { parts: [{ text: '{"nodes":' }, { text: '[],"edges":[]}' }] } },
+            ],
+          });
+    };
+    const openai = openAiProposalModel({ apiKey: 'oa', fetchImpl: capture });
+    expect(openai.id).toBe('openai:gpt-4.1-mini');
+    expect(await openai.complete(prompt)).toBe('{"nodes":[],"edges":[]}');
+    expect(seen[0]!.url).toBe('https://api.openai.com/v1/chat/completions');
+    expect(seen[0]!.headers.authorization).toBe('Bearer oa');
+    expect(seen[0]!.body).toMatchObject({
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: 'sys' },
+        { role: 'user', content: 'usr' },
+      ],
+    });
+    const gemini = geminiProposalModel({ apiKey: 'gm', model: 'gemini-test', fetchImpl: capture });
+    expect(gemini.id).toBe('gemini:gemini-test');
+    expect(await gemini.complete(prompt)).toBe('{"nodes":[],"edges":[]}');
+    expect(seen[1]!.url).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent',
     );
+    expect(seen[1]!.headers['x-goog-api-key']).toBe('gm');
+    expect(seen[1]!.body).toMatchObject({
+      systemInstruction: { parts: [{ text: 'sys' }] },
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+  });
+
+  it('selects the backend from the environment', () => {
+    expect(proposalModelFromEnv({})).toBeUndefined();
+    expect(proposalModelFromEnv({ ANTHROPIC_API_KEY: 'k' })?.id).toBe(
+      'anthropic:claude-sonnet-4-5',
+    );
+    expect(proposalModelFromEnv({ OPENAI_API_KEY: 'k' })?.id).toBe('openai:gpt-4.1-mini');
+    expect(proposalModelFromEnv({ GEMINI_API_KEY: 'k', PROPOSAL_MODEL: 'gemini-x' })?.id).toBe(
+      'gemini:gemini-x',
+    );
+    expect(
+      proposalModelFromEnv({
+        PROPOSAL_PROVIDER: 'openai',
+        OPENAI_API_KEY: 'k',
+        ANTHROPIC_API_KEY: 'k',
+      })?.id,
+    ).toBe('openai:gpt-4.1-mini');
+    expect(() => proposalModelFromEnv({ PROPOSAL_PROVIDER: 'openai' })).toThrow(/OPENAI_API_KEY/);
+    expect(() => proposalModelFromEnv({ PROPOSAL_PROVIDER: 'nope' })).toThrow(/PROPOSAL_PROVIDER/);
   });
 });

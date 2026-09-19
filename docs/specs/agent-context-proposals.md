@@ -57,7 +57,7 @@ proposal queues/UI, or embedding calls (the compiler embeds new nodes lazily).
 - [x] P5: Bounds: input text 1–20,000 code points; ≤ 8 nodes and ≤ 12 edges per call; project node/edge limits still enforced by the store.
 - [x] P6: The write is one `store.transaction`; a store failure leaves no partial proposal.
 - [x] P7: Available as `npm run propose -- <projectId> <file>` (or stdin) and as the MCP tool `propose_context`.
-- [x] P8: The model backend is Anthropic Messages (`fetch`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` default `claude-sonnet-4-5`) behind a `ProposalModel` interface; tests use a fixed model.
+- [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-2.5-flash`). Tests use a fixed model and mocked `fetch`.
 
 ## 7. Data model
 
@@ -221,8 +221,10 @@ Implemented decisions and findings:
   (one ```json fence tolerated). `component`/`file` proposals fail validation for
   the whole response so the caller can retry with clearer notes.
 - Model backend failures are `MODEL_UNAVAILABLE` (503), distinct from the
-  compiler's `EMBEDDING_UNAVAILABLE`. The Anthropic adapter (Messages API,
-  `anthropic-version: 2023-06-01`, temperature 0, one retry on 429/5xx) is unit
-  tested with a mocked `fetch`; a live run still needs a valid key.
+  compiler's `EMBEDDING_UNAVAILABLE`. All three vendor adapters share one transport (60 s timeout,
+  temperature 0, one retry on 429/5xx/network) and are unit tested with a mocked
+  `fetch`; a live run still needs a valid key for the chosen provider. The
+  embedding backend (`EMBEDDING_PROVIDER`) and the proposal backend
+  (`PROPOSAL_PROVIDER`) are independent settings.
 - A4 verified on PostgreSQL: a proposed decision reviewed to canonical is selected
   by the compiler at v2 while v1 stays readable as inferred.
