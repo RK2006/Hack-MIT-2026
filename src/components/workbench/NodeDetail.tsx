@@ -39,6 +39,9 @@ export default function NodeDetail({
           <span className="badge">v{current.version}</span>
         </div>
         <h2>{current.title}</h2>
+        <span className="node-id mono" title="Node id">
+          {node.id}
+        </span>
         <p className="detail-summary">
           {current.summary || <span className="muted">No summary has been added.</span>}
         </p>

@@ -1538,3 +1538,13 @@ table.archived td:first-child {
   border-color: var(--danger);
   background: var(--danger-soft);
 }
+
+/* Node id shown directly under a node title */
+.node-id {
+  display: block;
+  margin: 2px 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+  user-select: all;
+}

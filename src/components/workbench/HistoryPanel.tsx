@@ -66,6 +66,9 @@ export default function HistoryPanel({
         <div>
           <span className="section-kicker">Revision history</span>
           <h2>{nodeTitle}</h2>
+          <span className="node-id mono" title="Node id">
+            {nodeId}
+          </span>
         </div>
         <button type="button" className="button-secondary" onClick={onClose}>
           Back to detail
