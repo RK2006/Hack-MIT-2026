@@ -42,7 +42,7 @@ export default function Cover() {
           <h1 className="cover-title">Handoff</h1>
           <p className="cover-punch">Stop pasting your whole codebase into the prompt.</p>
           <p className="cover-line">
-            Handoff gives your agent only the part of your project the task needs.
+            Handoff maintains the rules, decisions, and known bugs behind your code, and gives a person/agent only the info their task needs.
           </p>
           <button
             ref={beginRef}
