@@ -1,0 +1,483 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "key": "source.adr-001",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-001-store-utc-render-in-stop-zone.md",
+      "label": "ADR-001: store UTC, render and schedule in the stop's zone",
+      "excerpt": "Decision: every instant is persisted as a UTC ISO-8601 string. Anything a traveller sees or is notified about is computed in the IANA zone of the itinerary stop it belongs to (stop.timezone), never the traveller's home zone. src/itinerary/timezone.ts owns the conversion (toZoned, localWallClock). Consequence: reminders, day headers, and check-in times all derive from the stop's zone.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.adr-002",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-002-minor-units-and-locked-fx.md",
+      "label": "ADR-002: money in minor units; FX locked at quote time",
+      "excerpt": "Decision: money is { amountMinor: integer, currency: ISO-4217 }. A quote captures fxRate and quotedAt once; bookings and displays reuse the quoted amount and never re-apply a rate. src/pricing/money.ts and src/pricing/quote.ts implement this.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.adr-003",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-003-client-booking-ref-idempotency.md",
+      "label": "ADR-003: client-generated bookingRef is the provider idempotency key",
+      "excerpt": "Decision: the client generates bookingRef before the first provider call. Every attempt, including retries in src/providers/retry.ts (max 3, jittered backoff), forwards the same bookingRef as the provider's idempotency key; adapters must treat a repeated ref as the same reservation. Never mint a new request id per attempt.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.adr-004",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-004-provider-search-cache.md",
+      "label": "ADR-004: provider search results cached 10 minutes, keyed by currency too",
+      "excerpt": "Decision: search responses are cached for 10 minutes in src/providers/cache.ts under (origin, destination, date, currency). Currency is part of the key because provider quotes are currency-specific and must not be reconverted.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.adr-005",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-005-soft-delete-stops.md",
+      "label": "ADR-005: itinerary stops are soft-deleted",
+      "excerpt": "Decision: deleting a stop sets deletedAt instead of removing the row so bookings keep their history. Consequence: anything scheduled against a stop (reminders in src/notifications) must treat a stop with deletedAt as cancelled and must not fire.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.contributing",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/blob/main/CONTRIBUTING.md",
+      "label": "CONTRIBUTING.md reviewer checklist",
+      "excerpt": "Reviewer checklist: instants stored UTC and rendered in the stop's zone; money in minor units with the quoted FX; bookingRef forwarded on every provider attempt; search cache key includes currency; soft-deleted stops cancel their reminders. Trips have exactly one traveller; providers are in-process fakes with injected latency and timeouts so tests are deterministic.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.pr-reminders",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/pulls?q=is%3Apr+trip+reminders",
+      "label": "Pull request: trip reminders",
+      "excerpt": "Adds src/notifications/reminders.ts and scheduler.ts. Reminder instants are computed from the traveller's home zone for now; tests/reminders.test.ts has a skipped case for a stop in another zone with a TODO to switch to the stop's zone.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.pr-hotel-retry",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/tripline/pulls?q=is%3Apr+provider+adapters",
+      "label": "Pull request: provider adapters, retry, cache",
+      "excerpt": "Adds flights/hotels adapters with retry and cache. Known gap: the hotel adapter builds a fresh provider request id on each retry attempt instead of forwarding bookingRef; a skipped test in tests/hotels.test.ts documents the duplicate reservation after a timeout.",
+      "actorLabel": "tripline-curator"
+    }
+  ],
+  "claims": [
+    {
+      "key": "constraint.utc-storage-stop-zone-display",
+      "type": "constraint",
+      "title": "Instants are stored as UTC; user-facing times use the stop's IANA zone",
+      "content": "All instants are persisted as UTC ISO-8601 strings. Any time shown to a traveller or used to schedule something on their behalf must be computed in the time zone of the itinerary stop it belongs to (stop.timezone, an IANA zone such as Asia/Tokyo), never in the traveller's home zone (trip.homeTimezone). Use toZoned(instant, stop.timezone) and localWallClock from src/itinerary/timezone.ts; do not call Date-zone helpers directly in other modules. 'Remind me at 9am on the day of the stop' means 9am in the stop's zone.",
+      "summary": "Store UTC; render and schedule in stop.timezone via src/itinerary/timezone.ts, never trip.homeTimezone.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.adr-001",
+      "changeReason": "Curated from ADR-001 for the Tripline demo project"
+    },
+    {
+      "key": "decision.adr-001-store-utc-render-stop-zone",
+      "type": "decision",
+      "title": "ADR-001: store UTC, render and schedule in the stop's zone",
+      "content": "Context: travellers cross zones within one trip and their home zone is meaningless for a stop elsewhere. Decision: persist UTC; derive wall-clock times from each stop's own IANA zone; centralise conversion in src/itinerary/timezone.ts. Consequences: day headers, check-in times, and reminders all take stop.timezone as input; a stop must carry its zone explicitly (see discovery on deriving zones).",
+      "summary": "Why every displayed or scheduled time takes the stop's zone as input.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.adr-001",
+      "changeReason": "Curated from ADR-001 for the Tripline demo project"
+    },
+    {
+      "key": "bug.reminders-home-zone",
+      "type": "bug",
+      "title": "Trip reminders are scheduled in the traveller's home zone instead of the stop's zone",
+      "content": "src/notifications/reminders.ts computes the reminder instant with trip.homeTimezone. For a stop whose zone differs from the traveller's home zone the reminder fires at the wrong local time (e.g. a 9am Tokyo reminder for a New York traveller fires at 9am New York time). The fix is to derive the instant from stop.timezone via toZoned/localWallClock in src/itinerary/timezone.ts. tests/reminders.test.ts contains the skipped reproduction.",
+      "summary": "reminders.ts uses trip.homeTimezone; should use stop.timezone through src/itinerary/timezone.ts.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.pr-reminders",
+      "changeReason": "Known issue recorded from the trip reminders pull request"
+    },
+    {
+      "key": "constraint.soft-deleted-stops-cancel-reminders",
+      "type": "constraint",
+      "title": "A soft-deleted stop cancels everything scheduled against it",
+      "content": "Itinerary stops are never hard-deleted; deletion sets stop.deletedAt. Any scheduled work keyed to a stop — reminders in src/notifications/scheduler.ts in particular — must check deletedAt at fire time and skip (cancel) rather than send. Queries that list active stops must filter deletedAt IS NULL.",
+      "summary": "Check stop.deletedAt before firing; soft-deleted stops must not notify.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.adr-005",
+      "changeReason": "Curated from ADR-005 for the Tripline demo project"
+    },
+    {
+      "key": "decision.adr-005-soft-delete-stops",
+      "type": "decision",
+      "title": "ADR-005: soft-delete itinerary stops",
+      "content": "Context: bookings reference stops and travellers expect to see what they cancelled. Decision: deleting a stop sets deletedAt; rows stay. Consequence: every consumer of stops (notifications, pricing summaries) must respect deletedAt, and the scheduler treats a deleted stop as a cancelled reminder.",
+      "summary": "Stops keep their rows; consumers filter on deletedAt.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.adr-005",
+      "changeReason": "Curated from ADR-005 for the Tripline demo project"
+    },
+    {
+      "key": "constraint.money-minor-units-fx-locked",
+      "type": "constraint",
+      "title": "Money is integer minor units with a currency; FX is locked at quote time",
+      "content": "Amounts are { amountMinor: integer, currency }. Never use floating-point currency values. A quote captures fxRate and quotedAt exactly once in src/pricing/quote.ts; bookings copy the quoted amount and displays format it. Re-applying an FX rate at booking or display time is a defect.",
+      "summary": "Integer minor units; the quote's fxRate is the only conversion.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.adr-002",
+      "changeReason": "Curated from ADR-002 for the Tripline demo project"
+    },
+    {
+      "key": "decision.adr-002-lock-fx-at-quote",
+      "type": "decision",
+      "title": "ADR-002: minor units and FX locked at quote time",
+      "content": "Context: floating-point totals drifted and re-converted prices changed between search and checkout. Decision: integer minor units everywhere; a single fxRate captured on the quote. Consequence: src/pricing/money.ts is the only arithmetic helper; bookings never convert.",
+      "summary": "Why prices are frozen on the quote.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.adr-002",
+      "changeReason": "Curated from ADR-002 for the Tripline demo project"
+    },
+    {
+      "key": "constraint.booking-ref-idempotency",
+      "type": "constraint",
+      "title": "Every provider attempt forwards the same client bookingRef as the idempotency key",
+      "content": "The client generates bookingRef before the first provider call. src/providers/retry.ts retries failed or timed-out calls up to 3 times with jittered backoff and must pass the identical bookingRef on each attempt; adapters send it as the provider idempotency key and treat a repeated ref as the same reservation. Minting a new request id per attempt can create duplicate reservations after a timeout.",
+      "summary": "Retries reuse bookingRef; adapters must not generate per-attempt ids.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.adr-003",
+      "changeReason": "Curated from ADR-003 for the Tripline demo project"
+    },
+    {
+      "key": "decision.adr-003-client-booking-ref",
+      "type": "decision",
+      "title": "ADR-003: client-generated bookingRef as provider idempotency key",
+      "content": "Context: provider timeouts are common with the fake providers' injected latency and would be with real ones. Decision: idempotency is owned by the caller, not the adapter, so retries are safe by construction. Consequence: src/bookings/idempotency.ts generates and persists the ref; adapters forward it unchanged.",
+      "summary": "Why idempotency lives with the caller.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.adr-003",
+      "changeReason": "Curated from ADR-003 for the Tripline demo project"
+    },
+    {
+      "key": "bug.hotel-retry-duplicate-reservation",
+      "type": "bug",
+      "title": "Hotel adapter mints a new request id per retry, duplicating reservations after a timeout",
+      "content": "src/providers/hotels.ts builds a fresh provider request id inside each attempt instead of forwarding the caller's bookingRef. When the first attempt times out but succeeds provider-side, the retry creates a second reservation. tests/hotels.test.ts holds the skipped reproduction. The fix is to pass bookingRef through unchanged as the idempotency key, matching src/providers/flights.ts.",
+      "summary": "hotels.ts ignores bookingRef on retries; should forward it like flights.ts.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.pr-hotel-retry",
+      "changeReason": "Known issue recorded from the provider adapters pull request"
+    },
+    {
+      "key": "constraint.provider-cache-key-includes-currency",
+      "type": "constraint",
+      "title": "Provider search cache is keyed by origin, destination, date, and currency for 10 minutes",
+      "content": "src/providers/cache.ts caches search results for 10 minutes under (origin, destination, date, currency). Currency is part of the key because provider quotes are currency-specific and must not be reconverted (see the money constraint). Omitting currency from the key serves one traveller another traveller's currency.",
+      "summary": "Cache key must include currency; TTL 10 minutes.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.adr-004",
+      "changeReason": "Curated from ADR-004 for the Tripline demo project"
+    },
+    {
+      "key": "decision.adr-004-cache-provider-search",
+      "type": "decision",
+      "title": "ADR-004: cache provider search results",
+      "content": "Context: repeated searches hit provider rate limits. Decision: a 10-minute in-memory cache in src/providers/cache.ts keyed by route, date, and currency; rateLimit.ts stays as the backstop. Consequence: quote.ts reads through the cache and must pass the traveller's currency.",
+      "summary": "Why search goes through a currency-aware cache.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.adr-004",
+      "changeReason": "Curated from ADR-004 for the Tripline demo project"
+    },
+    {
+      "key": "assumption.single-traveller-per-trip",
+      "type": "assumption",
+      "title": "A trip has exactly one traveller",
+      "content": "Trips carry one traveller with one home zone and one currency; group trips are out of scope. Code that needs 'the traveller' can read it from the trip without ambiguity.",
+      "summary": "No group trips; trip.traveller is singular.",
+      "importance": 2,
+      "confidence": 0.9,
+      "sourceKey": "source.contributing",
+      "changeReason": "Curated from CONTRIBUTING.md for the Tripline demo project"
+    },
+    {
+      "key": "assumption.fake-providers-deterministic",
+      "type": "assumption",
+      "title": "Providers are in-process fakes with injected latency and timeouts",
+      "content": "src/providers/fake/* implement the flight and hotel provider interfaces without network access. Latency and timeouts are injected per call so retry and idempotency behaviour is deterministic under test. No provider credentials exist anywhere in the project.",
+      "summary": "No network; timeouts are simulated.",
+      "importance": 2,
+      "confidence": 1,
+      "sourceKey": "source.contributing",
+      "changeReason": "Curated from CONTRIBUTING.md for the Tripline demo project"
+    },
+    {
+      "key": "discovery.zone-cannot-be-derived-from-city",
+      "type": "discovery",
+      "title": "A stop's zone cannot be derived from its destination string; it is stored explicitly",
+      "content": "City names are ambiguous and some destinations span zones, so the itinerary stores stop.timezone (IANA) explicitly when a stop is created. Consumers must read the stored zone rather than infer one from the destination or from the traveller.",
+      "summary": "Read stop.timezone; never infer a zone.",
+      "importance": 3,
+      "confidence": 0.95,
+      "sourceKey": "source.adr-001",
+      "changeReason": "Curated from ADR-001 for the Tripline demo project"
+    },
+    {
+      "key": "discovery.scheduler-compares-utc-instants",
+      "type": "discovery",
+      "title": "The scheduler tick compares UTC instants; zone only matters when choosing the wall-clock target",
+      "content": "src/notifications/scheduler.ts polls due reminders by comparing stored UTC instants with now(). Zone handling therefore belongs where the target instant is computed (reminders.ts), not in the scheduler loop.",
+      "summary": "Fix zone bugs where the instant is computed, not in the scheduler.",
+      "importance": 3,
+      "confidence": 0.9,
+      "sourceKey": "source.pr-reminders",
+      "changeReason": "Recorded from the trip reminders pull request"
+    }
+  ],
+  "edges": [
+    {
+      "fromKey": "file.src-notifications-reminders-ts",
+      "toKey": "component.src-notifications",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "file.src-notifications-scheduler-ts",
+      "toKey": "component.src-notifications",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "file.src-itinerary-timezone-ts",
+      "toKey": "constraint.utc-storage-stop-zone-display",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "component.src-notifications",
+      "toKey": "constraint.utc-storage-stop-zone-display",
+      "type": "REQUIRES",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "component.src-notifications",
+      "toKey": "component.src-itinerary",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "constraint.utc-storage-stop-zone-display",
+      "toKey": "component.src-itinerary",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "constraint.utc-storage-stop-zone-display",
+      "toKey": "decision.adr-001-store-utc-render-stop-zone",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "decision.adr-001-store-utc-render-stop-zone",
+      "toKey": "component.src-itinerary",
+      "type": "AFFECTS",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "discovery.zone-cannot-be-derived-from-city",
+      "toKey": "constraint.utc-storage-stop-zone-display",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "discovery.zone-cannot-be-derived-from-city",
+      "toKey": "component.src-itinerary",
+      "type": "AFFECTS",
+      "sourceKey": "source.adr-001"
+    },
+    {
+      "fromKey": "bug.reminders-home-zone",
+      "toKey": "file.src-notifications-reminders-ts",
+      "type": "AFFECTS",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "bug.reminders-home-zone",
+      "toKey": "component.src-notifications",
+      "type": "AFFECTS",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "bug.reminders-home-zone",
+      "toKey": "constraint.utc-storage-stop-zone-display",
+      "type": "RELATED_TO",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "discovery.scheduler-compares-utc-instants",
+      "toKey": "file.src-notifications-scheduler-ts",
+      "type": "AFFECTS",
+      "sourceKey": "source.pr-reminders"
+    },
+    {
+      "fromKey": "constraint.soft-deleted-stops-cancel-reminders",
+      "toKey": "component.src-notifications",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.adr-005"
+    },
+    {
+      "fromKey": "file.src-itinerary-service-ts",
+      "toKey": "constraint.soft-deleted-stops-cancel-reminders",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-005"
+    },
+    {
+      "fromKey": "constraint.soft-deleted-stops-cancel-reminders",
+      "toKey": "decision.adr-005-soft-delete-stops",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-005"
+    },
+    {
+      "fromKey": "file.src-pricing-money-ts",
+      "toKey": "constraint.money-minor-units-fx-locked",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-002"
+    },
+    {
+      "fromKey": "file.src-pricing-quote-ts",
+      "toKey": "constraint.money-minor-units-fx-locked",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-002"
+    },
+    {
+      "fromKey": "constraint.money-minor-units-fx-locked",
+      "toKey": "component.src-bookings",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.adr-002"
+    },
+    {
+      "fromKey": "constraint.money-minor-units-fx-locked",
+      "toKey": "decision.adr-002-lock-fx-at-quote",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-002"
+    },
+    {
+      "fromKey": "component.src-bookings",
+      "toKey": "component.src-pricing",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.adr-002"
+    },
+    {
+      "fromKey": "file.src-bookings-idempotency-ts",
+      "toKey": "constraint.booking-ref-idempotency",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-003"
+    },
+    {
+      "fromKey": "file.src-providers-retry-ts",
+      "toKey": "constraint.booking-ref-idempotency",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-003"
+    },
+    {
+      "fromKey": "constraint.booking-ref-idempotency",
+      "toKey": "component.src-providers",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.adr-003"
+    },
+    {
+      "fromKey": "constraint.booking-ref-idempotency",
+      "toKey": "decision.adr-003-client-booking-ref",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-003"
+    },
+    {
+      "fromKey": "component.src-bookings",
+      "toKey": "component.src-providers",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.adr-003"
+    },
+    {
+      "fromKey": "file.src-providers-hotels-ts",
+      "toKey": "component.src-providers",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "file.src-providers-flights-ts",
+      "toKey": "component.src-providers",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "file.src-providers-hotels-ts",
+      "toKey": "file.src-providers-retry-ts",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "bug.hotel-retry-duplicate-reservation",
+      "toKey": "file.src-providers-hotels-ts",
+      "type": "AFFECTS",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "bug.hotel-retry-duplicate-reservation",
+      "toKey": "component.src-bookings",
+      "type": "AFFECTS",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "bug.hotel-retry-duplicate-reservation",
+      "toKey": "constraint.booking-ref-idempotency",
+      "type": "RELATED_TO",
+      "sourceKey": "source.pr-hotel-retry"
+    },
+    {
+      "fromKey": "file.src-providers-cache-ts",
+      "toKey": "constraint.provider-cache-key-includes-currency",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.adr-004"
+    },
+    {
+      "fromKey": "constraint.provider-cache-key-includes-currency",
+      "toKey": "component.src-pricing",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.adr-004"
+    },
+    {
+      "fromKey": "constraint.provider-cache-key-includes-currency",
+      "toKey": "decision.adr-004-cache-provider-search",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-004"
+    },
+    {
+      "fromKey": "constraint.provider-cache-key-includes-currency",
+      "toKey": "constraint.money-minor-units-fx-locked",
+      "type": "RELATED_TO",
+      "sourceKey": "source.adr-004"
+    },
+    {
+      "fromKey": "assumption.single-traveller-per-trip",
+      "toKey": "component.src-trips",
+      "type": "AFFECTS",
+      "sourceKey": "source.contributing"
+    },
+    {
+      "fromKey": "assumption.fake-providers-deterministic",
+      "toKey": "component.src-providers",
+      "type": "AFFECTS",
+      "sourceKey": "source.contributing"
+    }
+  ]
+}

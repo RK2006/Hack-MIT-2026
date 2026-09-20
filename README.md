@@ -162,6 +162,25 @@ GitHub URL as evidence. Also available to agents as the MCP tools `scan_reposito
 `includeDocs`) and `ingest_documents`. Knowledge is then layered on with PR ingestion, agent
 proposals, and human review.
 
+## Demo: Tripline (real repository + curated knowledge)
+
+The headline demo runs against [Tripline](docs/specs/demo-tripline.md), a small real
+travel-planning service in its own repository. Structure comes from a scan; the reviewed
+knowledge layer (time-zone, money, idempotency, cache, and soft-delete rules, plus two
+known bugs) is a committed overlay whose evidence links to the repository's ADRs and PRs:
+
+```bash
+npm run demo:tripline -- /path/to/tripline            # scan + merge fixtures/tripline-claims.json + import
+npm run demo:tripline -- /path/to/tripline --out merged.json   # inspect the merged manifest instead
+cd /path/to/tripline && hof use Tripline
+hof checkout "Trip reminders fire at the wrong local time for stops in another time zone" --budget 2048
+```
+
+The overlay references the scanner's keys (`file.src-notifications-reminders-ts`, …); if
+the repository's paths change, the merge fails listing every missing key. Re-importing
+into a database that already holds Tripline is a conflict — use a fresh database rather
+than deleting data.
+
 ## GitHub pull requests → knowledge
 
 With `gh` logged in and an LLM key in `.env`, turn a PR into proposals whose evidence links to the PR:

@@ -1,6 +1,6 @@
 # Feature Spec — Demo Project: Tripline
 
-Status: Draft
+Status: Pipeline implemented against the spec'd layout (D1–D3); awaiting the Tripline repository for real evidence URLs, README headline, and rehearsal
 Owner: Project team
 Related issue/task: Hackathon demo preparation; uses [repository scan](repository-scan.md), [prepared project ingestion](prepared-project-ingestion.md), [GitHub PR ingestion](github-pr-ingestion.md), [agent context proposals](agent-context-proposals.md), [`hof` CLI](hof-cli.md), [compiler](task-context-compiler.md); demo criteria from [project spec](../PROJECT_SPEC.md) §14
 Last updated: 2026-09-20
@@ -130,8 +130,10 @@ provider times out" — idempotency rule lives in `providers/`, edit is in
       README.md, CONTRIBUTING.md
       ```
 
-      Target 45–70 tracked source files; the scan must import without
-      `--max-files`/`--include` and yield 8–10 components.
+      Target 40–70 tracked source files; the scan must import without
+      `--max-files`/`--include`. At the default depth 2 this yields the eight
+      `src/*` components plus `root`, `src`, `tests`, `docs`, and `docs/adr`
+      (≈ 13 components; `src/providers/fake` folds into `src/providers`).
 - [ ] T3: Cross-cutting rules, each implemented where stated and consumed
       elsewhere:
 
@@ -176,28 +178,34 @@ provider times out" — idempotency rule lives in `providers/`, edit is in
 
 ### 6.2 Demo pipeline (this repository)
 
-- [ ] D1: `fixtures/tripline-claims.json`: a partial manifest (`sources`,
-      `claims`, `edges` only) with 12–20 canonical claims — the five rules as
-      `constraint`/`decision` nodes, one `bug` (T5) and one `bug` (T6) recorded as
-      *canonical* known issues, and 3–5 `assumption`/`discovery` nodes — each with a
+- [x] D1: `fixtures/tripline-claims.json`: a partial manifest (`sources`,
+      `claims`, `edges` only) with 16 canonical claims — the five rules as
+      `constraint`/`decision` pairs, one `bug` (T5) and one `bug` (T6) recorded as
+      *canonical* known issues, and four `assumption`/`discovery` nodes — each with a
       `manual` source whose `uri` is the GitHub URL of the ADR, PR, or file that
       supports it, and an `excerpt` quoting it. Edges use scan keys
       (`component.src-notifications`, `file.src-notifications-reminders-ts`, …) and
-      the foundation's stored directions (e.g. `component.src-notifications REQUIRES constraint.utc-storage-stop-zone-display`, `file.src-notifications-reminders-ts IMPLEMENTS component.src-notifications`, `bug.reminders-home-zone AFFECTS component.src-notifications`, `bug.reminders-home-zone CAUSED_BY constraint.…`).
-- [ ] D2: `scripts/demo-tripline.ts` (npm script `demo:tripline -- <checkout>`):
-      runs `scanRepository(checkout, { name: 'Tripline', depth: 2 })`, merges the
-      claims fixture (append sources/claims/edges; fail with `VALIDATION_ERROR`
-      listing any `fromKey`/`toKey`/`sourceKey` absent from the merged manifest),
-      writes the merged manifest to `--out` if given, otherwise imports it with
+      the foundation's stored directions (e.g. `component.src-notifications REQUIRES constraint.utc-storage-stop-zone-display`, `file.src-notifications-reminders-ts IMPLEMENTS component.src-notifications`, `bug.reminders-home-zone AFFECTS component.src-notifications`, `bug.reminders-home-zone RELATED_TO constraint.…`; `CAUSED_BY` is not used because a bug is not *caused by* the rule it violates).
+      Source excerpts currently paraphrase the rules as this spec defines them;
+      once the ADRs exist they are to be replaced with verbatim quotes and the
+      `pulls?q=` search URLs with the real PR URLs.
+- [x] D2: `src/server/ingestion/overlay.ts` (`parseClaimsOverlay`,
+      `mergeClaimsOverlay`) and `scripts/demo-tripline.ts` (npm script
+      `demo:tripline -- <checkout> [--out] [--claims] [--name]`): runs
+      `scanRepository(checkout, { name: 'Tripline' })` at the default depth, merges
+      the claims fixture (append sources/claims/edges; fail with `VALIDATION_ERROR`
+      listing *every* `fromKey`/`toKey`/`sourceKey` absent from the merged manifest
+      and every key that collides with the scan), validates the result with
+      `parseManifestBytes`, writes it to `--out` if given, otherwise imports it with
       `importPreparedProject` and prints project id and counts. Reuses existing
       functions; no new store or ingestion behaviour.
-- [ ] D3: `hof checkout` prints `project context: N tokens (measured, cl100k_base)`
-      on stderr alongside the existing selection summary, so beat 1 has a spoken
-      number without opening the JSON. (Small addition to the CLI; recorded in
-      [hof-cli.md](hof-cli.md) §18 when done.)
+- [x] D3: `hof checkout` already prints the measured project total on stderr
+      (`status ok · 1751 / 2048 tokens (project total 6594) · cl100k_base · …`,
+      `formatBundleExplanation` in `src/cli/format.ts`). No CLI change was needed;
+      beat 1 reads that line.
 - [ ] D4: `README.md` gains a "Demo: Tripline" section replacing the payments
       walkthrough as the headline; the payments fixture stays documented as the
-      test fixture.
+      test fixture. (Headline swap waits for the repository URL.)
 - [ ] D5: A rehearsal checklist (§15) is executed on the real UI/CLI and its
       results recorded in §18.
 
@@ -233,8 +241,9 @@ Claim `changeReason` is e.g. `"Curated from ADR-001 for the demo project"`.
 
 ### `hof checkout` stderr
 
-Adds one line after the selection: `project context: <projectContextTokens> tokens · bundle: <tokenCount>/<tokenBudget>`.
-Stdout is unchanged (exact `contextText`).
+Unchanged: the first stderr line already reads
+`status <ok|degraded> · <tokenCount> / <tokenBudget> tokens (project total <projectContextTokens>) · cl100k_base · <model>`.
+Stdout is the exact `contextText`.
 
 ## 9. Context graph implications
 
@@ -306,17 +315,26 @@ demo database follows the README's guidance (private connection string,
 ## 14. Acceptance criteria
 
 - [ ] A1: From a fresh Tripline clone, `npm run demo:tripline -- <checkout>`
-      succeeds with defaults and reports 8–10 components, 45–70 files, all fixture
+      succeeds with defaults and reports ≥ 8 components, 40–70 files, all fixture
       claims and edges; `hof status` shows 0 pending, all canonical.
-- [ ] A2: `hof checkout` on the Tripline project prints a measured
-      `project context` token count ≥ 10× the compiled `tokenCount` at budget 2,048.
+      (Passes against the spec'd layout; pending the real clone.)
+- [ ] A2: `hof checkout` on the Tripline project prints a measured project total
+      ≥ 3× the compiled `tokenCount` at budget 2,048, and the selection is ≤ ¼ of
+      the active nodes. Measured on the layout stand-in: 6,594 project tokens vs a
+      1,751-token bundle (3.8×), 11 of 57 nodes. A 10× ratio was the original
+      target and is not honest for a project this size; the demo's "too much"
+      claim rests on precision (what was left out and why), not on compression.
 - [ ] A3: `hof checkout "<primary task>" --budget 2048 --json` selects
       `file.src-notifications-reminders-ts`, `component.src-notifications`, the
       UTC/stop-zone constraint, ADR-001 decision, and `bug.reminders-home-zone`;
       it selects no node under `component.src-pricing`, `component.src-providers`,
-      or `component.src-auth`; status is `ok` (semantic).
-- [ ] A4: Every selected item in A3 has ≥ 1 reason; the constraint's reason is a
-      `graph_neighbor` path of length ≤ 2 from a seed.
+      or `component.src-auth`; status is `ok` (semantic). (Passes on the stand-in
+      with the local provider: 11 nodes selected, exactly the notifications and
+      itinerary neighbourhood; pending the real clone.)
+- [ ] A4: Every selected item in A3 has ≥ 1 reason; the constraint is either a
+      semantic seed or a `graph_neighbor` at path length ≤ 2 from one. (Passes on
+      the stand-in; the constraint is itself a seed, and `timezone.ts`,
+      `reminders.ts`, and the soft-delete constraint arrive as graph neighbours.)
 - [ ] A5: With the A3 bundle prepended, a coding agent (Claude Code or Codex)
       edits `src/notifications/reminders.ts` to use `stop.timezone` via
       `itinerary/timezone.ts`, and un-skipping the T5 test passes. Without the
@@ -335,22 +353,22 @@ demo database follows the README's guidance (private connection string,
 
 ### Unit tests
 
-- `tests/demo/merge-manifest.test.ts`: merging the fixture into a scan manifest
-  appends sources/claims/edges; an unresolved key fails with `VALIDATION_ERROR`
-  listing it; output validates with `parseManifestBytes`.
-- `tests/cli/format.test.ts` (extend): `hof checkout` stderr includes the
-  `project context` line with the bundle's numbers.
-- Fixture lint: `fixtures/tripline-claims.json` parses; every source `uri` is
-  `https://github.com/<account>/tripline/…`; every claim has a source; keys are
-  unique.
+- `tests/demo/overlay.test.ts`: scans a throwaway git checkout with the exact T2
+  layout (`tests/demo/tripline-layout.ts`), merges the real fixture, and validates
+  the result with `parseManifestBytes` (so a fixture key that no longer matches
+  the layout fails here, before any database); every unresolved key is listed in
+  one error; colliding keys and overlays carrying structure are rejected; every
+  source is a `manual` GitHub URL under the tripline repository.
 
 ### Integration tests
 
-- `tests/demo/tripline.integration.test.ts` (skipped unless `TRIPLINE_PATH` is
-  set): scan + merge + import against the test database; asserts A1 counts and
-  that A3's expected node keys exist. Compiler expectations (A3/A4) run here with
-  the local provider when `TRIPLINE_PATH` is set — they are the semantic gate for
-  the demo, analogous to `semantic:smoke`.
+- `tests/demo/tripline.integration.test.ts`: scan + merge + import into an
+  isolated schema, then compiles both demo tasks with the **real local embedding
+  provider** — this is the semantic gate for the demo, analogous to
+  `semantic:smoke`. Uses `TRIPLINE_PATH` when set, otherwise the layout stand-in,
+  so it runs in `npm run test:integration` today and against the real clone
+  later. Asserts A1 counts and authority, A2 ratios, A3 inclusions/exclusions,
+  A4 reasons, the 1,024-budget "rules only" behaviour, and the backup task.
 
 ### UI/manual verification
 
@@ -370,11 +388,16 @@ T3's rule table are fixed, since the fixture keys derive from the paths):
 
 This repository:
 
-- [ ] D1: write `fixtures/tripline-claims.json` from the ADRs/PRs (real URLs).
-- [ ] D2: `scripts/demo-tripline.ts` + npm script + unit test.
-- [ ] D3: `hof checkout` project-context token line + test.
-- [ ] Integration test gated on `TRIPLINE_PATH`; run it; adjust fixture edges
-      until A3/A4 pass (adjusting the *graph*, never the compiler).
+- [x] D1: write `fixtures/tripline-claims.json` against the T2 layout.
+- [ ] D1b: once the repository exists, replace paraphrased excerpts with verbatim
+      ADR/PR quotes and search URLs with real PR URLs; re-run the tests.
+- [x] D2: `overlay.ts`, `scripts/demo-tripline.ts`, npm script, unit tests.
+- [x] D3: confirmed the existing `hof checkout` stderr line suffices; no change.
+- [x] Integration test (stand-in layout, real local provider); A3/A4 pass. One
+      fixture adjustment was needed: `hotels.ts`/`flights.ts IMPLEMENTS
+      component.src-providers` and `hotels.ts DEPENDS_ON retry.ts` so the backup
+      task reaches the adapter by graph path (graph adjusted, compiler untouched).
+- [ ] Re-run the integration test with `TRIPLINE_PATH` set to the real clone.
 - [ ] D4: README demo section.
 - [ ] Rehearse A5 with both agents; choose primary/backup task; record results.
 - [ ] Rehearse A6 with a live key and the `hof edit` fallback.
@@ -425,7 +448,32 @@ verifiable by the audience and every rebuild deterministic.
 
 ## 18. Durable context created by this feature
 
-To be filled after implementation and rehearsal:
+Learned while implementing the pipeline against the layout stand-in (2026-09-20):
+
+- A claims overlay (`sources` + `claims` + `edges`, no structure) merged onto a
+  scan is the reproducible way to layer curated knowledge on a real repository.
+  It depends on the scanner's deterministic keys, so the scanned project's file
+  paths are a contract: renaming `src/notifications/reminders.ts` breaks the
+  fixture, and `mergeClaimsOverlay` reports every such break in one error.
+- Curated claims imported through a `manual` source are canonical with a `human`
+  actor (`authorityFor`/`actorFor` in `manifest.ts`); the operator label is the
+  source's `actorLabel`, so the fixture uses `tripline-curator`.
+- Measured on the stand-in with `Xenova/all-MiniLM-L6-v2`: the primary task's
+  seeds are the bug, the constraint, ADR-001, and the two discoveries; the files
+  and components arrive as graph neighbours. At 2,048 tokens the bundle is the
+  full notifications + itinerary neighbourhood (11 nodes); at 1,024 only the four
+  rule/bug claims fit and everything else is reported as a budget omission —
+  a useful second beat ("lower the budget: only the rules survive").
+- The project total is ~6.5k tokens for ~57 nodes; the honest ratio to a
+  2,048-budget bundle is ~3.8×. Real file nodes (with leading comments) will add
+  a little, not 10×.
+- Compiler observation, not tuned: for the backup task the word "bookings" makes
+  `component.src-bookings` an `explicit_reference` seed with relevance 1.0, and
+  that relevance propagates to its 1-hop neighbours, so the money constraint
+  (which `CONSTRAINS` bookings) ranks second above the hotel bug. Worth noting
+  in the compiler spec if it recurs on the real repository.
+
+To be filled after the repository exists and rehearsal:
 
 - Tripline repository URL and the commit hash used for the demo.
 - Final primary/backup demo task sentences and the measured token numbers.
