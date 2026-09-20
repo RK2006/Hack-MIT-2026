@@ -4,6 +4,8 @@ import {
   circleBoundaryPoint,
   clampGraphZoom,
   dragPanOffset,
+  graphEdgeCurveOffsets,
+  graphEdgeGeometry,
   graphLabelsOverlap,
   GRAPH_NODE_MIN_DISTANCE,
   GRAPH_NODE_RADIUS,
@@ -144,6 +146,44 @@ describe('graph node geometry', () => {
     expect(long).toHaveLength(2);
     expect(long.every((line) => line.length <= 18)).toBe(true);
     expect(long[1]).toMatch(/…$/);
+  });
+});
+
+describe('graph edge geometry', () => {
+  it('keeps a single relationship straight', () => {
+    const offsets = graphEdgeCurveOffsets([{ id: 'only', fromNodeId: 'a', toNodeId: 'b' }]);
+    expect(offsets.get('only')).toBe(0);
+    expect(graphEdgeGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, 0).control).toEqual({
+      x: 50,
+      y: 0,
+    });
+  });
+
+  it('routes reciprocal relationships on opposite sides with separate labels', () => {
+    const edges = [
+      { id: 'forward', fromNodeId: 'a', toNodeId: 'b' },
+      { id: 'reverse', fromNodeId: 'b', toNodeId: 'a' },
+    ];
+    const offsets = graphEdgeCurveOffsets(edges);
+    const forward = graphEdgeGeometry({ x: 0, y: 0 }, { x: 100, y: 0 }, offsets.get('forward')!);
+    const reverse = graphEdgeGeometry({ x: 100, y: 0 }, { x: 0, y: 0 }, offsets.get('reverse')!);
+
+    expect(forward.control.y).toBeGreaterThan(0);
+    expect(reverse.control.y).toBeLessThan(0);
+    expect(forward.label.y).toBeGreaterThan(0);
+    expect(reverse.label.y).toBeLessThan(0);
+    expect(Math.abs(forward.label.y - reverse.label.y)).toBeGreaterThan(16);
+  });
+
+  it('assigns routes deterministically and fans parallel relationships', () => {
+    const edges = [
+      { id: 'second', fromNodeId: 'a', toNodeId: 'b' },
+      { id: 'first', fromNodeId: 'a', toNodeId: 'b' },
+    ];
+    const a = graphEdgeCurveOffsets(edges);
+    const b = graphEdgeCurveOffsets([...edges].reverse());
+    expect([...a.entries()].sort()).toEqual([...b.entries()].sort());
+    expect(a.get('first')).not.toBe(a.get('second'));
   });
 });
 

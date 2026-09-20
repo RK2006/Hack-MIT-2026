@@ -34,17 +34,24 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
 ## 5. User experience
 
 1. `/` lists projects; choosing one opens `/projects/<projectId>`.
-2. The project page has three regions: graph/list (left), detail panel (right),
-   task panel (bottom of the right column, collapsible). The graph is an SVG with
+2. The project page has two workspace regions: graph/list (left) and a tabbed
+   inspector (right). The inspector gives node details and task context separate,
+   full-height tabs so neither workflow competes for vertical space. Switching tabs
+   preserves an in-progress task and compiled result; selecting a node from task
+   results returns to node details. The graph is an SVG with
    a deterministic in-app force layout with collision-aware spacing on a roomy
    network canvas. Nodes render as colored circles with bounded labels, using a
-   dashed outline for inferred context. Users can drag nodes to refine the transient
-   layout, drag the dotted background to pan, reset them to the deterministic
+   dashed outline plus an explicit badge for inferred context. Users can drag nodes
+   to refine the transient layout, drag the dotted background to pan, reset them to the deterministic
    layout, and zoom with corner-mounted minus/percentage/plus controls. The dotted
    background covers the full graph viewport at every zoom. Edges are directed
-   arrows labeled by type (dashed when inferred). A "List" toggle shows the same
-   nodes as a table filterable by type and text, so the graph is never the only
-   navigation.
+   arrows labeled by type (dashed when inferred). A single relationship uses a
+   straight path; reciprocal relationships between the same nodes use opposing
+   curves with separately offset labels. Labels remain faintly visible by default
+   and become prominent when related, highlighted, or hovered. The header omits the
+   raw project UUID, and the graph summary contains only active-node and relationship
+   counts. A "List" toggle shows the same nodes as a table filterable by type and
+   text, so the graph is never the only navigation.
 3. Clicking a node shows: title, type, authority label, importance, confidence,
    version, actor/reason, external key/path, content, summary; relationships as
    directed sentences ("this node → REQUIRES → Idempotency (canonical)"); the
@@ -71,7 +78,9 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
    a node inferred also removes it from the queue (the actor is now human).
 7. Task panel: task text, token budget (256–8,192, default 4,096), depth (0–3),
    optional start = selected node, "Allow degraded" checkbox off by default,
-   Compile. Result: status, tokenizer, model, measured tokens vs budget vs
+   Compile. Depth, start-node behavior, and degraded fallback are grouped under
+   progressive Advanced options. The tab shows a compact selected-node/token summary
+   after compilation. Result: status, tokenizer, model, measured tokens vs budget vs
    measured project context tokens, ranked selected items with reasons/paths and
    authority labels, omissions, warnings, rendered text with Copy. Each graph
    reason lists its path steps (from → TYPE → to, with edge authority), and the
@@ -109,11 +118,34 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       provide background drag-to-pan, deterministic reset, and bounded zoom controls.
       Dragged positions, viewport pan, and zoom are transient. Geometry and build
       checks pass; browser interaction verification remains open.
+- [~] W8a: Route reciprocal relationships on deterministic opposing curves and
+      offset each label along its own path, while retaining the existing faded-label
+      treatment. Single relationships remain straight. Geometry checks pass; browser
+      visual verification remains open.
 - [~] W9: Use a consistent readable type scale, spacing rhythm, button hierarchy,
       cards, and restrained color tokens across the workbench. Normal prose uses
       sans-serif typography; monospace is limited to code, IDs, paths, locators,
       model names, and exact compiled context. Implementation and automated checks
       pass; browser visual verification remains open.
+- [~] W9a: Adopt the "field notebook" visual direction. Pale sage-grey paper with
+      muted green-grey hairline rules; sections are separated by rules and whitespace,
+      not bordered/shadowed cards. Typography: Bricolage Grotesque for headings and
+      node titles, Source Sans 3 for UI chrome and prose, Fira Code for IDs, paths,
+      locators, model names, and exact compiled context, all loaded via `next/font`
+      (self-hosted at build, no runtime dependency). Moss ink text; one rust accent
+      for links and primary actions; amber reserved for task selection. Text inputs
+      are underlined fields rather than boxes; badges are small-caps text rather than
+      pills. Authority uses one device everywhere (canonical = solid rule/green ink;
+      inferred = dashed rule/ochre ink). Every color, including SVG graph strokes and
+      node type colors, comes from `globals.css` tokens or `shared.tsx` `NODE_COLORS`;
+      components carry no hardcoded hex values. Existing class names and markup are
+      unchanged. (A dark "instrument panel" variant and a cream/serif "editorial"
+      variant were both tried in the browser and rejected: the first as a generic
+      dev-tool look, the second as too close to a well-known AI assistant's brand.)
+- [~] W10: Separate node inspection and task compilation into full-height right-rail
+      tabs, preserve task state while switching, show a compact compiled-result
+      summary in the task tab, and progressively disclose secondary task controls.
+      Implementation and automated checks pass; browser visual verification remains open.
 
 ## 7. Data model
 
@@ -244,10 +276,16 @@ selection reasons. No source text or secrets in request logs.
       overlap, dragging updates incident edges, Reset layout restores deterministic
       positions, the dotted background covers the full panel, background dragging
       pans without moving nodes, and the corner controls zoom within documented limits.
+      Reciprocal arrows and their labels occupy opposing curved lanes rather than
+      overlapping, while unrelated labels remain faintly visible.
 - [ ] A7: The selected-node panel presents title, summary, status, primary actions,
       overview metrics, content, relationships, and provenance in that order; raw
       technical metadata is collapsed by default, and the detail/history/form/task
       surfaces use one consistent typography and spacing system.
+- [ ] A8: Node details and task context occupy separate full-height right-rail tabs;
+      task inputs/results survive tab switches, advanced controls are collapsed by
+      default, a compiled result is summarized in the tab, and inferred nodes combine
+      a dashed outline with a readable authority badge.
 
 ## 15. Test plan
 
@@ -258,9 +296,13 @@ selection reasons. No source text or secrets in request logs.
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
 - A6: `tests/workbench/layout.test.ts` — circular collision spacing, bounds,
   deterministic reset coordinates, title wrapping/truncation, circle-edge
-  intersections, zoom clamping, and drag-pan offset calculation.
+  intersections, reciprocal curve assignment/geometry, zoom clamping, and drag-pan
+  offset calculation.
 - A7: production build/typecheck plus the browser checklist; semantic HTML remains
   keyboard navigable and all existing labels/values remain present.
+- A8: production build/typecheck plus the browser checklist; tab/tabpanel relationships,
+  preserved mounted task state, advanced disclosure, and graph authority labels remain
+  keyboard and screen-reader discoverable.
 - §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
@@ -302,6 +344,15 @@ selection reasons. No source text or secrets in request logs.
     and action hierarchy, readable prose, compact relationship cards, accessible
     evidence, and collapsed Technical details. Open History, Edit, and Task context
     and confirm their typography, controls, focus states, and spacing are consistent.
+12. Switch repeatedly between Node details and Task context before and after compiling.
+    Confirm task inputs/results persist, the compiled count/token summary appears in
+    the tab, Advanced options are collapsed initially, and selecting a result opens
+    that node's details. Confirm inferred graph nodes show both a dashed outline and
+    an explicit Inferred marker while every node body remains circular.
+13. Confirm the header has no raw project UUID and the graph summary contains only
+    node/relationship counts. Inspect a reciprocal relationship pair: its arrows bend
+    to opposite sides, its label pills do not overlap, and unrelated labels remain
+    softly visible rather than disappearing.
 
 ## 16. Implementation plan
 
@@ -314,9 +365,19 @@ selection reasons. No source text or secrets in request logs.
 - [~] Add collision-aware circular layout, bounded labels, pointer dragging,
       background drag-to-pan, full-viewport grid, corner zoom controls, and reset;
       verify geometry automatically and complete browser interaction check (A6).
+- [~] Add deterministic reciprocal-edge lanes and path-relative label positions;
+      simplify the graph summary/header; verify geometry automatically and complete
+      browser visual review (A6).
 - [~] Apply the shared typography/color/spacing system and restructure node detail;
       verify build/accessibility invariants automatically and complete browser visual
       review (A7).
+- [~] Replace the stacked detail/task split with persistent tab panels, simplify the
+      task form with progressive disclosure and result summary, and clarify inferred
+      graph styling; verify automated checks and complete browser visual review (A8).
+- [~] Apply the field-notebook theme (W9a): load Bricolage Grotesque / Source Sans 3 /
+      Fira Code via `next/font`, replace the token set and remove card chrome in
+      `globals.css`, move GraphView SVG colors into CSS classes and retune `NODE_COLORS`
+      for sage paper; verify typecheck/lint/format/unit/build and review in the browser.
 
 ## 17. Alternatives considered
 
@@ -340,6 +401,13 @@ small node forms proves inspection/review without those dependencies.
 Persistence would require a new user-layout model and mutation API for presentation
 state that is not canonical project knowledge. For the MVP, dragging is local UI
 state and Reset/reload returns to the deterministic graph.
+
+### Bottom task drawer or dedicated task page
+
+A full-width drawer gives results more room but obscures the graph that explains the
+selection. A dedicated page also breaks the immediate highlight-and-inspect loop. A
+mutually exclusive right-rail tab keeps the graph visible, removes nested vertical
+competition, and can preserve the task component state without a new persistence model.
 
 ## 18. Durable context created by this feature
 
@@ -386,6 +454,11 @@ Findings from the read/edit/history slice:
   empty panel space as well as the SVG at every zoom.
   Edge labels stay quiet until related to the selected node, highlighted by a task
   path, or hovered, reducing default clutter.
+- Edge routes are grouped by unordered node pair. A lone edge receives zero curvature;
+  reciprocal directions receive the same local positive offset, which becomes opposing
+  visual curves because reversing an edge reverses its perpendicular normal. Parallel
+  same-direction edges fan around the centerline. Labels use the midpoint of their own
+  quadratic path and retain the existing low-opacity default instead of disappearing.
 - The workbench uses a dependency-free system sans stack and an 8 px-oriented spacing
   rhythm. Monospace is reserved for technical values and exact agent context. The
   detail panel exposes the same data as before but progressively discloses raw IDs,
@@ -407,6 +480,11 @@ Findings from the review queue (W8):
 
 Findings from the task-panel integration:
 
+- Node details and task compilation are sibling tab panels in the right rail rather
+  than vertically stacked regions. Both remain mounted while one is hidden, so task
+  inputs and compiled results survive inspection switches without persisting a new
+  browser or server model. Selecting a task result deliberately returns to node
+  details, while the compact task-tab summary remains visible.
 - `TaskPanel` is the only consumer of `ContextBundle`; it renders reasons and
   `PathStep` sequences verbatim from the compiler and never re-ranks. Highlights
   (node IDs plus path edge IDs) are derived from the displayed bundle and cleared

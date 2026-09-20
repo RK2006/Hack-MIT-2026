@@ -16,6 +16,7 @@ import TaskPanel from './TaskPanel';
 
 type View = 'graph' | 'list' | 'review' | 'archived';
 type Panel = { kind: 'detail' } | { kind: 'history' } | { kind: 'form'; mode: FormMode };
+type InspectorTab = 'node' | 'task';
 
 export default function Workbench({ projectId }: { projectId: string }) {
   const [graph, setGraph] = useState<GraphSnapshot | null>(null);
@@ -30,7 +31,8 @@ export default function Workbench({ projectId }: { projectId: string }) {
   const [highlightedEdgeIds, setHighlightedEdgeIds] = useState<Set<string>>(() => new Set());
   const [graphVersion, setGraphVersion] = useState(0);
   const [panel, setPanel] = useState<Panel>({ kind: 'detail' });
-  const [taskOpen, setTaskOpen] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState<InspectorTab>('node');
+  const [taskSummary, setTaskSummary] = useState<TaskSummary>(null);
 
   // Graph snapshot: refetched whenever graphVersion changes (after every successful mutation).
   useEffect(() => {
@@ -107,12 +109,14 @@ export default function Workbench({ projectId }: { projectId: string }) {
   const selectNode = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId);
     setPanel({ kind: 'detail' });
+    setInspectorTab('node');
   }, []);
 
   const onSaved = useCallback((nodeId: string) => {
     setGraphVersion((v) => v + 1);
     setSelectedNodeId(nodeId);
     setPanel({ kind: 'detail' });
+    setInspectorTab('node');
   }, []);
 
   const startAction = (action: NodeAction) => {
@@ -130,9 +134,6 @@ export default function Workbench({ projectId }: { projectId: string }) {
       <header className="topbar">
         <Link href="/">← Projects</Link>
         <h1>{graph?.project.name ?? 'Loading project…'}</h1>
-        <span className="topbar-project-id mono" title={projectId}>
-          {projectId}
-        </span>
         <nav className="tabs" aria-label="View">
           {(['graph', 'list', 'review', 'archived'] as View[]).map((option) => (
             <button
@@ -155,9 +156,10 @@ export default function Workbench({ projectId }: { projectId: string }) {
         <button
           type="button"
           className="button-primary"
-          onClick={() =>
-            setPanel({ kind: 'form', mode: { kind: 'create', selectedNode: selectedNode } })
-          }
+          onClick={() => {
+            setInspectorTab('node');
+            setPanel({ kind: 'form', mode: { kind: 'create', selectedNode: selectedNode } });
+          }}
         >
           New node
         </button>
@@ -185,8 +187,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
           {graph && view === 'graph' ? (
             <>
               <p className="muted">
-                {graph.nodes.length} active nodes · {graph.edges.length} edges · drag nodes to
-                refine the view
+                {graph.nodes.length} active nodes · {graph.edges.length} relationships
               </p>
               <GraphView
                 nodes={graph.nodes}
@@ -232,8 +233,44 @@ export default function Workbench({ projectId }: { projectId: string }) {
           ) : null}
         </section>
 
-        <aside className="right">
-          <div className="right-top">
+        <aside className="right" aria-label="Project inspector">
+          <div className="inspector-tabs" role="tablist" aria-label="Inspector view">
+            <button
+              id="node-details-tab"
+              type="button"
+              role="tab"
+              aria-selected={inspectorTab === 'node'}
+              aria-controls="node-details-panel"
+              className={inspectorTab === 'node' ? 'inspector-tab active' : 'inspector-tab'}
+              onClick={() => setInspectorTab('node')}
+            >
+              Node details
+            </button>
+            <button
+              id="task-context-tab"
+              type="button"
+              role="tab"
+              aria-selected={inspectorTab === 'task'}
+              aria-controls="task-context-panel"
+              className={inspectorTab === 'task' ? 'inspector-tab active' : 'inspector-tab'}
+              onClick={() => setInspectorTab('task')}
+            >
+              <span>Task context</span>
+              {taskSummary ? (
+                <span className="inspector-tab-summary">
+                  {taskSummary.selectedCount} nodes · {taskSummary.tokenCount.toLocaleString()} tok
+                </span>
+              ) : null}
+            </button>
+          </div>
+
+          <div
+            id="node-details-panel"
+            role="tabpanel"
+            aria-labelledby="node-details-tab"
+            className="inspector-panel"
+            hidden={inspectorTab !== 'node'}
+          >
             {panel.kind === 'form' ? (
               <NodeForm
                 key={`${panel.mode.kind}-${selectedNodeId ?? 'none'}`}
@@ -270,24 +307,22 @@ export default function Workbench({ projectId }: { projectId: string }) {
               </p>
             )}
           </div>
-          <div className="right-bottom">
-            <button
-              type="button"
-              className="collapse"
-              aria-expanded={taskOpen}
-              onClick={() => setTaskOpen((open) => !open)}
-            >
-              {taskOpen ? '▾' : '▸'} Task panel
-            </button>
-            {taskOpen ? (
-              <TaskPanel
-                projectId={projectId}
-                selectedNodeId={selectedNodeId}
-                graphVersion={graphVersion}
-                onHighlight={onHighlight}
-                onSelectNode={selectNode}
-              />
-            ) : null}
+
+          <div
+            id="task-context-panel"
+            role="tabpanel"
+            aria-labelledby="task-context-tab"
+            className="inspector-panel"
+            hidden={inspectorTab !== 'task'}
+          >
+            <TaskPanel
+              projectId={projectId}
+              selectedNodeId={selectedNodeId}
+              graphVersion={graphVersion}
+              onHighlight={onHighlight}
+              onSelectNode={selectNode}
+              onSummaryChange={setTaskSummary}
+            />
           </div>
         </aside>
       </div>

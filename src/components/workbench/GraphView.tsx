@@ -2,9 +2,10 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
-  circleBoundaryPoint,
   clampGraphZoom,
   dragPanOffset,
+  graphEdgeCurveOffsets,
+  graphEdgeGeometry,
   GRAPH_LABEL_MAX_HEIGHT,
   GRAPH_LABEL_WIDTH,
   GRAPH_NODE_MIN_DISTANCE,
@@ -53,6 +54,7 @@ export default function GraphView({
     [nodes, edges],
   );
   const defaultPositions = useMemo(() => layoutGraph(nodes, edges, WIDTH, HEIGHT), [nodes, edges]);
+  const edgeCurveOffsets = useMemo(() => graphEdgeCurveOffsets(edges), [edges]);
   const [layoutState, setLayoutState] = useState<{
     key: string;
     positions: Map<string, Point>;
@@ -161,24 +163,27 @@ export default function GraphView({
             aria-label={`Graph with ${nodes.length} nodes and ${edges.length} edges`}
           >
             <defs>
-              <marker
-                id="arrow"
-                viewBox="0 0 10 10"
-                refX="10"
-                refY="5"
-                markerWidth="8"
-                markerHeight="8"
-                orient="auto-start-reverse"
-              >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#555" />
-              </marker>
+              {(['arrow', 'arrow-path'] as const).map((id) => (
+                <marker
+                  key={id}
+                  id={id}
+                  className={`marker-${id}`}
+                  viewBox="0 0 10 10"
+                  refX="10"
+                  refY="5"
+                  markerWidth="8"
+                  markerHeight="8"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" />
+                </marker>
+              ))}
             </defs>
             {edges.map((edge) => {
               const from = positions.get(edge.fromNodeId);
               const to = positions.get(edge.toNodeId);
               if (!from || !to) return null;
-              const start = circleBoundaryPoint(from, to, 1);
-              const end = circleBoundaryPoint(to, from, 5);
+              const geometry = graphEdgeGeometry(from, to, edgeCurveOffsets.get(edge.id) ?? 0);
               const inferred = edge.authority === 'inferred';
               const onPath = highlightedEdgeIds?.has(edge.id) ?? false;
               const related =
@@ -191,19 +196,16 @@ export default function GraphView({
                   className={`edge edge-${edge.authority}${onPath ? ' edge-path' : ''}${related ? ' edge-related' : ''}`}
                 >
                   <title>{label}</title>
-                  <line
-                    x1={start.x}
-                    y1={start.y}
-                    x2={end.x}
-                    y2={end.y}
-                    stroke={onPath ? '#f59e0b' : '#555'}
-                    strokeWidth={onPath ? 3 : 1.2}
+                  <path
+                    className="edge-line"
+                    d={`M ${geometry.start.x} ${geometry.start.y} Q ${geometry.control.x} ${geometry.control.y} ${geometry.end.x} ${geometry.end.y}`}
+                    fill="none"
                     strokeDasharray={inferred ? '5 4' : undefined}
-                    markerEnd="url(#arrow)"
+                    markerEnd={onPath ? 'url(#arrow-path)' : 'url(#arrow)'}
                   />
                   <g
                     className="edge-label-group"
-                    transform={`translate(${(from.x + to.x) / 2} ${(from.y + to.y) / 2})`}
+                    transform={`translate(${geometry.label.x} ${geometry.label.y})`}
                   >
                     <rect x={-labelWidth / 2} y={-9} width={labelWidth} height={16} rx={8} />
                     <text className="edge-label" textAnchor="middle" y={2.5}>
@@ -288,22 +290,27 @@ export default function GraphView({
                   }}
                 >
                   {highlighted ? (
-                    <circle
-                      r={GRAPH_NODE_RADIUS + 7}
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth={4}
-                    />
+                    <circle className="node-highlight-ring" r={GRAPH_NODE_RADIUS + 7} fill="none" />
                   ) : null}
                   <circle
-                    className="node-circle"
+                    className={`node-circle${selected ? ' node-circle-selected' : ''}`}
                     r={GRAPH_NODE_RADIUS}
                     fill={NODE_COLORS[node.type]}
-                    fillOpacity={inferred ? 0.78 : 0.96}
-                    stroke={selected ? '#111827' : '#fff'}
-                    strokeWidth={selected ? 3 : 2}
+                    fillOpacity={inferred ? 0.72 : 1}
                     strokeDasharray={inferred ? '6 4' : undefined}
                   />
+                  {inferred ? (
+                    <g
+                      className="node-authority-marker"
+                      transform={`translate(0 ${-GRAPH_NODE_RADIUS})`}
+                      aria-hidden="true"
+                    >
+                      <rect x={-23} y={-8} width={46} height={16} rx={8} />
+                      <text y={3} textAnchor="middle">
+                        INFERRED
+                      </text>
+                    </g>
+                  ) : null}
                   <text y={3.5} textAnchor="middle" className="node-type">
                     {node.type.slice(0, 2).toUpperCase()}
                   </text>
@@ -362,7 +369,11 @@ export default function GraphView({
         ))}
         <li>
           <span className="swatch swatch-dashed" aria-hidden="true" />
-          dashed = inferred
+          dashed + badge = inferred
+        </li>
+        <li>
+          <span className="swatch swatch-solid" aria-hidden="true" />
+          solid = canonical
         </li>
         <li>
           <span className="swatch swatch-highlight" aria-hidden="true" />
