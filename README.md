@@ -93,11 +93,14 @@ tracked source files → File nodes; nothing is executed or analyzed):
 
 ```bash
 npm run scan:repo -- /path/to/repo --import            # or --out scan.json to inspect first
-npm run scan:repo -- . --import --include src --depth 2
+npm run scan:repo -- /path/to/repo --import --docs     # also read README/AGENTS/CONTRIBUTING/CHANGELOG/docs into proposals
+npm run ingest:docs -- <projectId> /path/to/repo       # docs only, e.g. later or for chosen files
 ```
 
-Also available to agents as the MCP tool `scan_repository`. Knowledge is then layered on with PR
-ingestion, agent proposals, and human review.
+Structure is canonical; documentation claims arrive inferred in the **Review** tab with each file's
+GitHub URL as evidence. Also available to agents as the MCP tools `scan_repository` (with
+`includeDocs`) and `ingest_documents`. Knowledge is then layered on with PR ingestion, agent
+proposals, and human review.
 
 ## GitHub pull requests → knowledge
 

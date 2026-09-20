@@ -71,6 +71,7 @@ describe('context-graph MCP server', () => {
       'compile_context',
       'get_node',
       'get_source',
+      'ingest_documents',
       'ingest_pull_request',
       'list_projects',
       'propose_context',

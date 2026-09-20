@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { compileContext, type CompilerDeps } from '../context/compiler/compile';
 import { REQUEST_LIMITS } from '../context/compiler/types';
 import { GraphError } from '../context/errors';
+import { ingestDocumentation } from '../ingestion/docs';
 import { ingestPullRequest } from '../ingestion/github-pr';
 import { importPreparedProject } from '../ingestion/import';
 import { scanRepository } from '../ingestion/scan';
@@ -165,15 +166,29 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
           .max(20)
           .optional()
           .describe('Path prefixes to keep'),
+        includeDocs: z
+          .boolean()
+          .optional()
+          .describe(
+            'Also read README/AGENTS/CONTRIBUTING/CHANGELOG/docs/**.md into inferred proposals for review (needs a proposal model)',
+          ),
       }),
     },
-    async ({ path, name, depth, maxFiles, include }) =>
+    async ({ path, name, depth, maxFiles, include, includeDocs }) =>
       run('scan_repository', async () => {
         const { manifest, stats } = await scanRepository(path, { name, depth, maxFiles, include });
         const imported = await importPreparedProject(
           Buffer.from(JSON.stringify(manifest)),
           deps.store,
         );
+        const docs =
+          includeDocs && deps.proposalModel
+            ? await ingestDocumentation(
+                { store: deps.store, model: deps.proposalModel },
+                imported.projectId,
+                path,
+              )
+            : null;
         return ok({
           projectId: imported.projectId,
           name: manifest.project.name,
@@ -184,6 +199,18 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
           components: stats.components,
           skipped: stats.skipped,
           commit: stats.commit,
+          docs: docs
+            ? {
+                created: docs.created,
+                documents: docs.documents.map((d) => ({
+                  path: d.path,
+                  status: d.status,
+                  ...(d.reason && { reason: d.reason }),
+                })),
+              }
+            : includeDocs
+              ? { skipped: 'no proposal model configured' }
+              : null,
         });
       }),
   );
@@ -215,6 +242,32 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
               projectId,
               request,
             )) as unknown as Record<string, unknown>,
+          ),
+        ),
+    );
+
+    server.registerTool(
+      'ingest_documents',
+      {
+        title: 'Ingest repository documentation as proposed knowledge',
+        description:
+          'Read README/AGENTS/CONTRIBUTING/CHANGELOG/docs/**.md (or the given files) from a local git checkout and extract durable knowledge as inferred nodes citing each file URL; a human reviews them. Use after scan_repository.',
+        inputSchema: z.object({
+          projectId: uuid,
+          path: z.string().min(1).max(1000).describe('Absolute path to the git work tree root'),
+          files: z
+            .array(z.string().min(1).max(500))
+            .max(50)
+            .optional()
+            .describe('Relative paths; default documentation set when omitted'),
+        }),
+      },
+      async ({ projectId, path, files }) =>
+        run('ingest_documents', async () =>
+          ok(
+            (await ingestDocumentation({ store: deps.store, model }, projectId, path, {
+              files,
+            })) as unknown as Record<string, unknown>,
           ),
         ),
     );

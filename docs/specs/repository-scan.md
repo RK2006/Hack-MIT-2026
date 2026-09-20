@@ -57,6 +57,26 @@ kind — the scanner emits only `component` and `file` nodes.
 - [x] S7: Bounds: total nodes ≤ 1,000 and files ≤ `--max-files` (default 600); exceeding either is `LIMIT_EXCEEDED` with counts and a hint to use `--include`/`--depth`.
 - [x] S8: CLI `scan:repo` (`--out`, `--import`, `--depth`, `--max-files`, `--include`, `--name`) and MCP tool `scan_repository { path, name?, depth?, maxFiles?, include? }` that imports and returns `{ projectId, name, nodes, edges, sources }`.
 
+### Documentation ingestion (`--docs`)
+
+The scanner records structure only, but a repository's own documentation
+(`README`, `AGENTS`/`CLAUDE`, `CONTRIBUTING`, `CHANGELOG`, `SECURITY`,
+`ARCHITECTURE`, `docs/**/*.md`, `adr/**/*.md`) is where teams write down rules and
+decisions. `ingestDocumentation(deps, projectId, rootPath, { files?, maxDocs? })`
+reads each selected tracked file (≤ 256 KiB, ≥ 40 characters) and runs it through
+`proposeContext` with a per-file source whose `uri` is the GitHub blob URL pinned
+to the scanned commit. Results are ordinary inferred proposals for the Review tab;
+edges resolve to the scanned File/Component nodes. A failing model call is
+reported per document and never aborts the rest; a missing proposal model makes
+`--docs` a no-op with a message. Available as `npm run scan:repo -- <path>
+--import --docs`, `npm run ingest:docs -- <projectId> <path> [files…]`, MCP
+`scan_repository { includeDocs: true }`, and MCP `ingest_documents`.
+
+The two steps stay separate writes on purpose: tree facts are canonical and free;
+interpretations of prose are inferred, cost a model call, and need a human.
+
+- [x] S9: Documentation ingestion as specified above, with per-document status (`proposed` / `skipped` / `failed`) and reasons.
+
 ## 7. Data model
 
 ### New entities
@@ -127,10 +147,11 @@ CLI prints counts (files, components, skipped, commit) and the project id.
 - [x] A2: Bounds and filters: `--max-files`, `--include`, non-git path, empty result behave as specified (unit).
 - [x] A3: The scanned manifest of this repository validates and imports into PostgreSQL; a second import conflicts (integration).
 - [x] A4: MCP `scan_repository` on this repo returns the project and it appears in the workbench (manual, recorded in §18).
+- [x] A5: Documentation ingestion writes inferred claims per document citing the file URL, skips trivial files, reports model failures per document, and one-command `scan:repo --import --docs` works on an unfamiliar repository (integration + manual, recorded in §18).
 
 ## 15. Test plan
 
-Unit (`tests/ingestion/scan.test.ts`) with a temp `git init` repo. Integration
+Unit (`tests/ingestion/scan.test.ts`, `tests/ingestion/docs.test.ts`) with a temp `git init` repo. Integration
 (`tests/ingestion/scan.integration.test.ts`) scanning this repository into an
 isolated schema. Manual A4.
 
@@ -138,6 +159,7 @@ isolated schema. Manual A4.
 
 - [x] Relax the manifest label rule; implement `scanRepository` with unit tests (A1/A2).
 - [x] CLI and MCP tool; integration test (A3); live scan of this repo (A4).
+- [x] Documentation ingestion (`--docs`, `ingest:docs`, MCP tools) with unit/integration tests and live runs (A5).
 - [x] Docs, spec §18, commit/push.
 
 ## 17. Alternatives considered
@@ -173,3 +195,13 @@ Implemented decisions and findings:
   layered on top, as intended.
 - Found while verifying: `main` did not typecheck after the UI_fixes merge
   (`TaskSummary` import dropped in `Workbench.tsx`); fixed here.
+
+Documentation ingestion, live on 2026-09-20 with `gemini:gemini-3.8-flash`:
+- `ai-website-cloner-template` (a repository none of us had read): 5 documents →
+  18 inferred nodes / 22 edges, e.g. constraint "Pixel-Perfect Emulation First
+  Principle" and bug "Windows CRLF Line Endings Break Script File Resolution"
+  from `CHANGELOG.md`; `CLAUDE.md` correctly skipped as too short.
+- `sindresorhus/is-online`, freshly cloned, in one command
+  (`scan:repo --import --docs`): 14 structural nodes + 6 proposals from its readme.
+- Selection order and blob-URL construction are unit tested; per-document
+  failure isolation and the skip rules are integration tested with a fixed model.
