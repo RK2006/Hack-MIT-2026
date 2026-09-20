@@ -334,6 +334,8 @@ Before committing:
 
 Use concise commit messages that describe the completed change.
 
+Do not add tool attribution to commits: no "Generated with …" lines and no agent `Co-Authored-By` trailers.
+
 Prefer one logical commit per completed feature or meaningful milestone rather than committing every small edit.
 
 ### Pushes
