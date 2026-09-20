@@ -131,9 +131,6 @@ export default function Workbench({ projectId }: { projectId: string }) {
       <header className="topbar">
         <Link href="/">← Projects</Link>
         <h1>{graph?.project.name ?? 'Loading project…'}</h1>
-        <span className="topbar-project-id mono" title={projectId}>
-          {projectId}
-        </span>
         <nav className="tabs" aria-label="View">
           {(['graph', 'list', 'archived'] as View[]).map((option) => (
             <button
@@ -181,8 +178,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
           {graph && view === 'graph' ? (
             <>
               <p className="muted">
-                {graph.nodes.length} active nodes · {graph.edges.length} edges · drag nodes to
-                refine the view
+                {graph.nodes.length} active nodes · {graph.edges.length} relationships
               </p>
               <GraphView
                 nodes={graph.nodes}

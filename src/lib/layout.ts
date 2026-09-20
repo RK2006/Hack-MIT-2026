@@ -8,6 +8,15 @@ export const GRAPH_ZOOM_MIN = 0.6;
 export const GRAPH_ZOOM_MAX = 2;
 export const GRAPH_ZOOM_STEP = 0.2;
 export const GRAPH_ZOOM_DEFAULT = 1.4;
+export const GRAPH_RECIPROCAL_CURVE = 56;
+export const GRAPH_PARALLEL_CURVE_GAP = 36;
+
+export type GraphEdgeGeometry = {
+  start: Point;
+  control: Point;
+  end: Point;
+  label: Point;
+};
 
 /** FNV-1a 32-bit hash; gives every node a stable starting position without Math.random. */
 function hash(text: string): number {
@@ -174,6 +183,81 @@ export function circleBoundaryPoint(from: Point, to: Point, padding = 0): Point 
   return { x: from.x + dx * scale, y: from.y + dy * scale };
 }
 
+/**
+ * Assigns stable curve offsets to edges sharing the same unordered node pair.
+ * Reciprocal directions receive the same local offset; reversing the edge reverses
+ * its normal, so the two paths bend onto opposite visual sides.
+ */
+export function graphEdgeCurveOffsets(
+  edges: ReadonlyArray<{ id: string; fromNodeId: string; toNodeId: string }>,
+): Map<string, number> {
+  const result = new Map<string, number>();
+  const groups = new Map<string, typeof edges>();
+
+  for (const edge of edges) {
+    if (edge.fromNodeId === edge.toNodeId) {
+      result.set(edge.id, 0);
+      continue;
+    }
+    const [a, b] = [edge.fromNodeId, edge.toNodeId].sort();
+    const key = `${a}\u0000${b}`;
+    groups.set(key, [...(groups.get(key) ?? []), edge]);
+  }
+
+  for (const group of groups.values()) {
+    const sorted = [...group].sort((a, b) => a.id.localeCompare(b.id));
+    const canonicalFrom = [
+      ...new Set(sorted.flatMap((edge) => [edge.fromNodeId, edge.toNodeId])),
+    ].sort()[0]!;
+    const forward = sorted.filter((edge) => edge.fromNodeId === canonicalFrom);
+    const reverse = sorted.filter((edge) => edge.fromNodeId !== canonicalFrom);
+
+    if (forward.length > 0 && reverse.length > 0) {
+      for (const direction of [forward, reverse]) {
+        direction.forEach((edge, index) => {
+          result.set(edge.id, GRAPH_RECIPROCAL_CURVE + index * GRAPH_PARALLEL_CURVE_GAP);
+        });
+      }
+      continue;
+    }
+
+    sorted.forEach((edge, index) => {
+      const centeredIndex = index - (sorted.length - 1) / 2;
+      result.set(edge.id, centeredIndex * GRAPH_PARALLEL_CURVE_GAP);
+    });
+  }
+
+  return result;
+}
+
+/** Returns a circle-clipped quadratic edge and its path-relative label midpoint. */
+export function graphEdgeGeometry(from: Point, to: Point, curveOffset: number): GraphEdgeGeometry {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const distance = Math.hypot(dx, dy);
+  const midpoint = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const control =
+    distance === 0
+      ? midpoint
+      : {
+          x: midpoint.x + (-dy / distance) * curveOffset,
+          y: midpoint.y + (dx / distance) * curveOffset,
+        };
+  const start = circleBoundaryPoint(from, control, 1);
+  const end = circleBoundaryPoint(to, control, 5);
+  const label = {
+    x: start.x * 0.25 + control.x * 0.5 + end.x * 0.25,
+    y: start.y * 0.25 + control.y * 0.5 + end.y * 0.25,
+  };
+
+  return {
+    start: roundPoint(start),
+    control: roundPoint(control),
+    end: roundPoint(end),
+    label: roundPoint(label),
+  };
+}
+
 export function clampGraphZoom(zoom: number): number {
   return Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, round(zoom)));
 }
@@ -210,6 +294,7 @@ export function wrapGraphTitle(title: string, maxChars = 24, maxLines = 2): stri
 }
 
 const round = (value: number) => Math.round(value * 100) / 100;
+const roundPoint = ({ x, y }: Point): Point => ({ x: round(x), y: round(y) });
 
 /** Only https: locators become clickable; repo:/manual:/agent: schemes render as text. */
 export function isSafeLink(uri: string): boolean {

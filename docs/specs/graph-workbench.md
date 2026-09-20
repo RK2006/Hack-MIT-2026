@@ -45,9 +45,13 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
    to refine the transient layout, drag the dotted background to pan, reset them to the deterministic
    layout, and zoom with corner-mounted minus/percentage/plus controls. The dotted
    background covers the full graph viewport at every zoom. Edges are directed
-   arrows labeled by type (dashed when inferred). A "List" toggle shows the same
-   nodes as a table filterable by type and text, so the graph is never the only
-   navigation.
+   arrows labeled by type (dashed when inferred). A single relationship uses a
+   straight path; reciprocal relationships between the same nodes use opposing
+   curves with separately offset labels. Labels remain faintly visible by default
+   and become prominent when related, highlighted, or hovered. The header omits the
+   raw project UUID, and the graph summary contains only active-node and relationship
+   counts. A "List" toggle shows the same nodes as a table filterable by type and
+   text, so the graph is never the only navigation.
 3. Clicking a node shows: title, type, authority label, importance, confidence,
    version, actor/reason, external key/path, content, summary; relationships as
    directed sentences ("this node → REQUIRES → Idempotency (canonical)"); the
@@ -101,6 +105,10 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       provide background drag-to-pan, deterministic reset, and bounded zoom controls.
       Dragged positions, viewport pan, and zoom are transient. Geometry and build
       checks pass; browser interaction verification remains open.
+- [~] W8a: Route reciprocal relationships on deterministic opposing curves and
+      offset each label along its own path, while retaining the existing faded-label
+      treatment. Single relationships remain straight. Geometry checks pass; browser
+      visual verification remains open.
 - [~] W9: Use a consistent readable type scale, spacing rhythm, button hierarchy,
       cards, and restrained color tokens across the workbench. Normal prose uses
       sans-serif typography; monospace is limited to code, IDs, paths, locators,
@@ -240,6 +248,8 @@ selection reasons. No source text or secrets in request logs.
       overlap, dragging updates incident edges, Reset layout restores deterministic
       positions, the dotted background covers the full panel, background dragging
       pans without moving nodes, and the corner controls zoom within documented limits.
+      Reciprocal arrows and their labels occupy opposing curved lanes rather than
+      overlapping, while unrelated labels remain faintly visible.
 - [ ] A7: The selected-node panel presents title, summary, status, primary actions,
       overview metrics, content, relationships, and provenance in that order; raw
       technical metadata is collapsed by default, and the detail/history/form/task
@@ -257,7 +267,8 @@ selection reasons. No source text or secrets in request logs.
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
 - A6: `tests/workbench/layout.test.ts` — circular collision spacing, bounds,
   deterministic reset coordinates, title wrapping/truncation, circle-edge
-  intersections, zoom clamping, and drag-pan offset calculation.
+  intersections, reciprocal curve assignment/geometry, zoom clamping, and drag-pan
+  offset calculation.
 - A7: production build/typecheck plus the browser checklist; semantic HTML remains
   keyboard navigable and all existing labels/values remain present.
 - A8: production build/typecheck plus the browser checklist; tab/tabpanel relationships,
@@ -309,6 +320,10 @@ selection reasons. No source text or secrets in request logs.
     the tab, Advanced options are collapsed initially, and selecting a result opens
     that node's details. Confirm inferred graph nodes show both a dashed outline and
     an explicit Inferred marker while every node body remains circular.
+13. Confirm the header has no raw project UUID and the graph summary contains only
+    node/relationship counts. Inspect a reciprocal relationship pair: its arrows bend
+    to opposite sides, its label pills do not overlap, and unrelated labels remain
+    softly visible rather than disappearing.
 
 ## 16. Implementation plan
 
@@ -321,6 +336,9 @@ selection reasons. No source text or secrets in request logs.
 - [~] Add collision-aware circular layout, bounded labels, pointer dragging,
       background drag-to-pan, full-viewport grid, corner zoom controls, and reset;
       verify geometry automatically and complete browser interaction check (A6).
+- [~] Add deterministic reciprocal-edge lanes and path-relative label positions;
+      simplify the graph summary/header; verify geometry automatically and complete
+      browser visual review (A6).
 - [~] Apply the shared typography/color/spacing system and restructure node detail;
       verify build/accessibility invariants automatically and complete browser visual
       review (A7).
@@ -403,6 +421,11 @@ Findings from the read/edit/history slice:
   empty panel space as well as the SVG at every zoom.
   Edge labels stay quiet until related to the selected node, highlighted by a task
   path, or hovered, reducing default clutter.
+- Edge routes are grouped by unordered node pair. A lone edge receives zero curvature;
+  reciprocal directions receive the same local positive offset, which becomes opposing
+  visual curves because reversing an edge reverses its perpendicular normal. Parallel
+  same-direction edges fan around the centerline. Labels use the midpoint of their own
+  quadratic path and retain the existing low-opacity default instead of disappearing.
 - The workbench uses a dependency-free system sans stack and an 8 px-oriented spacing
   rhythm. Monospace is reserved for technical values and exact agent context. The
   detail panel exposes the same data as before but progressively discloses raw IDs,
