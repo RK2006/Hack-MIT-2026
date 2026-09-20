@@ -16,21 +16,31 @@ import { isolatedDatabase } from '../helpers/postgres';
 let db: Awaited<ReturnType<typeof isolatedDatabase>>;
 let services: Services;
 let cwd: string;
+let clipboard = '';
 
 /** Every input embeds to the same vector, so similarity is 1 everywhere: deterministic and offline. */
 const provider = fixedEmbeddingProvider(new Map(), { dimensions: 3, fallback: [1, 0, 0] });
 
 type Result = { code: number; out: string; err: string; json: <T>() => T };
+type Options = {
+  env?: Record<string, string>;
+  stdin?: string;
+  /** Scripted answers for `review`; also marks the session interactive. */
+  answers?: string[];
+};
 
-async function hof(args: string[], env: Record<string, string> = {}): Promise<Result> {
+async function hof(args: string[], options: Options = {}): Promise<Result> {
   let out = '';
   let err = '';
+  const answers = [...(options.answers ?? [])];
   const io: Io = {
     stdout: (text) => (out += text),
     stderr: (text) => (err += text),
     cwd,
-    env,
-    readStdin: async () => '',
+    env: options.env ?? {},
+    readStdin: async () => options.stdin ?? '',
+    isTTY: options.answers !== undefined,
+    prompt: async () => answers.shift() ?? 'q',
   };
   const code = await run(args, io, services);
   return { code, out, err, json: <T>() => JSON.parse(out) as T };
@@ -47,6 +57,11 @@ beforeAll(async () => {
     store,
     compiler: async () => ({ store, provider, cache: createEmbeddingCache(db.pool) }),
     proposalModel: () => null,
+    editText: async (initial) => `${initial}\n\nEdited by the reviewer.`,
+    copy: async (text) => {
+      clipboard = text;
+      return true;
+    },
   };
   cwd = mkdtempSync(join(tmpdir(), 'hof-int-'));
 });
@@ -173,5 +188,124 @@ describe('hof review loop', () => {
     const result = await hof(['propose', '-']);
     expect(result.code).toBe(EXIT.environment);
     expect(result.err).toContain('ANTHROPIC_API_KEY');
+  });
+});
+
+describe('hof authoring', () => {
+  const evidence = ['-m', 'Recorded during the demo', '--evidence', 'Observed in staging logs'];
+
+  it('creates a canonical node linked to an existing one, reading content from stdin', async () => {
+    const created = await hof(
+      [
+        'note',
+        'decision',
+        'Retry webhook delivery asynchronously',
+        '--content',
+        '-',
+        '--summary',
+        'Retries move to a queue',
+        '--key',
+        'decision.async-retries',
+        '--link',
+        'component.stripe-webhooks',
+        '--edge',
+        'AFFECTS',
+        ...evidence,
+      ],
+      { stdin: 'Retries run from a queue so the webhook path stays fast.\n' },
+    );
+    expect(created.code).toBe(EXIT.ok);
+    expect(created.out).toMatch(
+      /^Created [0-9a-f]{8} decision "Retry webhook delivery asynchronously" \(canonical v1\) · edge this → AFFECTS → /,
+    );
+    const shown = (await hof(['show', 'decision.async-retries', '--json'])).json<{
+      node: ContextNode;
+    }>().node;
+    expect(shown.current.content).toContain('Retries run from a queue');
+    expect(shown.current.actor).toEqual({ kind: 'human', label: 'local-operator' });
+    expect((await hof(['show', 'decision.async-retries'])).out).toContain('this → AFFECTS →');
+  });
+
+  it('requires -m and --evidence, a content flag, and a valid type', async () => {
+    expect((await hof(['note', 'decision', 'X', '--content', 'y'])).code).toBe(EXIT.usage);
+    expect((await hof(['note', 'decision', 'X', ...evidence])).code).toBe(EXIT.usage);
+    expect((await hof(['note', 'widget', 'X', '--content', 'y', ...evidence])).code).toBe(
+      EXIT.usage,
+    );
+    expect((await hof(['note', 'file', 'X', '--content', 'y', ...evidence])).code).toBe(
+      EXIT.domain,
+    ); // files need --path: store validation
+  });
+
+  it('edits fields as a new revision and reports a no-op', async () => {
+    const edited = await hof([
+      'edit',
+      'decision.async-retries',
+      '--summary',
+      'Retries are queued',
+      '--importance',
+      '4',
+      ...evidence,
+    ]);
+    expect(edited.code).toBe(EXIT.ok);
+    expect(edited.out).toContain('→ v2 (canonical)');
+    const diff = await hof(['diff', 'decision.async-retries', '1', '2']);
+    expect(diff.out).toContain(
+      'summary:\n  - v1: Retries move to a queue\n  + v2: Retries are queued',
+    );
+    expect(diff.out).toContain('importance:');
+    const noop = await hof(['edit', 'decision.async-retries', '--importance', '4', ...evidence]);
+    expect(noop.out).toContain('nothing changed');
+    expect((await hof(['edit', 'decision.async-retries', ...evidence])).code).toBe(EXIT.usage);
+  });
+
+  it('archives and restores, keeping history', async () => {
+    const archived = await hof(['archive', 'decision.async-retries', ...evidence]);
+    expect(archived.code).toBe(EXIT.ok);
+    expect(archived.out).toContain('→ v3 archived');
+    expect((await hof(['ls', '--archived'])).out).toContain(
+      'Retry webhook delivery asynchronously',
+    );
+    const restored = await hof(['restore', 'decision.async-retries', ...evidence]);
+    expect(restored.out).toContain('→ v4 restored');
+    expect(
+      (await hof(['log', 'decision.async-retries', '--json'])).json<{ revisions: unknown[] }>()
+        .revisions,
+    ).toHaveLength(4);
+  });
+});
+
+describe('hof review and checkout --copy', () => {
+  it('walks pending proposals with scripted answers: accept, edit, skip, quit', async () => {
+    const before = (await hof(['pending', '--json'])).json<{ nodes: ContextNode[] }>().nodes;
+    expect(before.length).toBeGreaterThanOrEqual(2);
+    const result = await hof(['review', '--note', 'Batch review'], {
+      answers: ['x', 'a', 'e', 's', 'q'],
+    });
+    expect(result.code).toBe(EXIT.ok);
+    expect(result.out).toContain(`[1/${before.length}]`);
+    expect(result.out).toContain('✓ edited and accepted');
+    expect(result.out).toMatch(/accepted 1 · edited 1 · rejected 0 · skipped [01] · failed 0/);
+    const edited = (await hof(['show', before[1]!.id, '--json'])).json<{ node: ContextNode }>()
+      .node;
+    expect(edited.current.authority).toBe('canonical');
+    expect(edited.current.content).toContain('Edited by the reviewer.');
+    expect(edited.current.changeReason).toBe('Edited and accepted agent proposal');
+    const after = (await hof(['pending', '--json'])).json<{ nodes: ContextNode[] }>().nodes;
+    expect(after).toHaveLength(before.length - 2);
+  });
+
+  it('falls back to the pending table without a TTY, exit 2', async () => {
+    const result = await hof(['review']);
+    expect(result.code).toBe(EXIT.usage);
+    expect(result.err).toContain('interactive terminal');
+  });
+
+  it('copies the exact text with --copy and still prints it', async () => {
+    clipboard = '';
+    const result = await hof(['checkout', 'Fix duplicate Stripe webhook processing', '--copy']);
+    expect(result.code).toBe(EXIT.ok);
+    expect(clipboard).toBe(result.out);
+    expect(result.err).toContain('copied');
   });
 });

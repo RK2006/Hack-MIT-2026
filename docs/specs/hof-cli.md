@@ -1,6 +1,6 @@
 # Feature Spec — `hof` Command-Line Interface
 
-Status: Slice one implemented and verified; slice two specified
+Status: Implemented and verified (slices one and two)
 Owner: Project team
 Related issue/task: [project spec](../PROJECT_SPEC.md) §6 Flow E (agent handoff) and Flow F (update after work); reuses [compiler](task-context-compiler.md), [foundation](context-graph-foundation.md), [agent proposals](agent-context-proposals.md), [PR ingestion](github-pr-ingestion.md), and the review semantics of [the workbench](graph-workbench.md)
 Last updated: 2026-09-20
@@ -118,23 +118,39 @@ Slice one:
       `3` environment (database unreachable, no proposal model configured). Colors are
       never used on `checkout` stdout and only elsewhere when stdout is a TTY.
 
-Slice two (specified, not started):
+Slice two:
 
-- [ ] C10: `note <type> "<title>" [--content file|-] [--summary] [--link <node> <EDGE> [--incoming]] -m --evidence`
-      creates a canonical node (optional single edge) via `createOperatorNode`.
-- [ ] C11: `edit <node> [--title|--content|--summary|--importance|--confidence] -m --evidence`,
-      `archive <node> -m --evidence`, `restore <node> -m --evidence` via `reviseOperatorNode`
-      with `expectedVersion` = current; a `CONFLICT` is reported, never retried silently.
-- [ ] C12: `review` steps through pending proposals interactively (`a`ccept, `r`eject,
-      `e`dit in `$EDITOR`, `s`kip, `q`uit) when stdin is a TTY.
-- [ ] C13: `checkout --copy` writes to the clipboard via `pbcopy`/`xclip`/`wl-copy` when
-      one exists and still prints to stdout.
+- [x] C10: `note <type> "<title>" --content <text|@file|-> [--summary] [--key] [--path]
+      [--importance] [--confidence] [--inferred] [--link <node> --edge <EDGE_TYPE> [--incoming]]
+      -m "<reason>" --evidence "<note>"` creates a node (canonical unless `--inferred`) with
+      an optional single edge via `createOperatorNode`. `--content` accepts literal text,
+      `@path` to read a file, or `-` for stdin. `--path` is required for `file` nodes.
+- [x] C11: `edit <node> [--title] [--content] [--summary] [--importance] [--confidence]
+      [--canonical|--inferred] -m --evidence`, `archive <node>… -m --evidence`, and
+      `restore <node>… -m --evidence` go through `reviseOperatorNode` with
+      `expectedVersion` = the version just read; a `CONFLICT` is reported with both
+      versions and never retried silently. `edit` with no field flags is a usage error.
+- [x] C12: `review` steps through pending proposals when stdin is a TTY: shows the
+      proposal and its evidence, then prompts `a`ccept / `r`eject / `e`dit-then-accept
+      (opens `$EDITOR`/`$VISUAL`, default `vi`, on the content) / `s`kip / `q`uit. `--note`
+      applies to every decision. Without a TTY it prints the pending table and exits 2.
+- [x] C13: `checkout --copy` writes the exact text to the clipboard through the first of
+      `pbcopy`, `wl-copy`, `xclip -selection clipboard` found on `PATH`, still prints to
+      stdout, and reports "copied" on stderr; no tool → warning on stderr, exit 0.
+- [x] C14: Operator attribution is configurable for shared databases: every workbench
+      and CLI write uses actor `{ kind: 'human', label: OPERATOR_LABEL }` where
+      `OPERATOR_LABEL` comes from the environment (1–120 characters) and defaults to
+      `local-operator`. Labels are attribution, not authentication (project spec §9).
+- [x] C15: `bin/hof` is a POSIX shell wrapper that runs `scripts/hof.js` with `node`
+      from the repository, so teammates can `export PATH="<repo>/bin:$PATH"` instead of
+      `npm link` when their global npm prefix is not writable.
 
 ## 7. Data model
 
 ### New entities
 
-None in the database. `.hof/project` is a one-line file in the developer's
+None in the database. `OPERATOR_LABEL` (C14) changes only the `actor.label` value
+stored on new revisions and edges; the schema is unchanged. `.hof/project` is a one-line file in the developer's
 working directory containing a project UUID; it is presentation/binding state,
 not project knowledge, and is git-ignored.
 
@@ -170,9 +186,22 @@ export function formatDiff(rows: FieldComparison[], a: number, b: number): strin
 export function formatBundleExplanation(bundle: ContextBundle): string;
 export function formatPending(nodes: ContextNode[]): string;
 
+// src/cli/input.ts — pure apart from file/stdin reads
+export async function readContentArg(value: string, readStdin: () => Promise<string>): Promise<string>; // text | @file | -
+
 // src/cli/hof.ts — command table and runner
 export const COMMANDS: Record<string, CommandSpec>;
-export async function run(argv: string[], io: { stdout; stderr; cwd; env; isTTY }): Promise<number>; // exit code
+export type Io = { stdout; stderr; cwd; env; readStdin; isTTY: boolean; prompt: (question: string) => Promise<string> };
+export type Services = {
+  store; compiler(); proposalModel();
+  serve?(): Promise<void>;
+  editText?(initial: string): Promise<string>;        // $EDITOR round trip (C12)
+  copy?(text: string): Promise<boolean>;              // clipboard (C13); false when no tool exists
+};
+export async function run(argv: string[], io: Io, services: Services): Promise<number>; // exit code
+
+// src/server/workbench/mutations.ts (C14)
+export function operatorActor(env = process.env): Actor;  // { kind: 'human', label: env.OPERATOR_LABEL ?? 'local-operator' }
 ```
 
 `scripts/hof.ts` loads `.env` from the repository root (like `mcp-server.ts`, so
@@ -289,6 +318,16 @@ full bundle including `warnings` and `omissions`.
 - [x] Integration test; run all checks; manual session; update §18; commit and push
       `CLI_interface`.
 
+Slice two:
+
+- [x] `OPERATOR_LABEL` in `mutations.ts` (`operatorActor(env)`), `.env.example`, README (C14).
+- [x] `src/cli/input.ts`: `readContentArg` (`text | @file | -`) + tests.
+- [x] `note`, `edit`, `archive`, `restore` commands + integration tests (C10, C11).
+- [x] `Io.isTTY` / `Io.prompt`, `Services.editText`, `review` command + integration test
+      with a scripted prompt (C12).
+- [x] `Services.copy`, `checkout --copy` (C13); `bin/hof` wrapper (C15); README.
+- [x] All checks; update §18; commit and push `CLI_interface`.
+
 ## 17. Alternatives considered
 
 ### Keep adding `npm run …` scripts
@@ -344,3 +383,28 @@ for data on `checkout`.
   is no compiled distribution. `npm link` is the intended install for now.
 - `.env` is read from the repository root (like the MCP server), not from cwd, so
   `hof` behaves the same from any bound directory.
+
+Findings from slice two:
+
+- The store's `changed: false` path compares the full snapshot **including
+  `sourceId`**, and every operator write mints a fresh manual source first, so an
+  operator revise can never be a store-level no-op: an unchanged `edit` would record
+  a new revision and an orphan source. The CLI therefore compares the proposed
+  snapshot (minus `sourceId`) with the current one *before* calling
+  `reviseOperatorNode` (`proposedSnapshot`/`sameSnapshot` in `src/cli/hof.ts`). The
+  workbench UI has the same latent behavior for identical saves; fixing it in the
+  store (compare without `sourceId`) is a small foundation change left for later.
+- `accept`, `reject`, `review`, `archive`, and `restore` share `applyDecision` /
+  `forEachRef`, so the CLI has exactly one place that decides what a decision writes.
+- `review` is driven through `Io.prompt`/`Io.isTTY` and `Services.editText`, so the
+  integration test scripts answers (`x a e s q`) and fakes the editor without a PTY.
+  Non-TTY invocations print the pending table and exit 2 rather than hanging.
+- `--content` values use `@file` / `-` / `@@literal` (`src/cli/input.ts`) instead of a
+  second positional, keeping every authoring command's grammar flag-based.
+- Clipboard support probes `pbcopy`, `wl-copy`, then `xclip`; failure is a warning, not
+  an error, because the text is already on stdout.
+- `OPERATOR_LABEL` is read per call (`operatorActor(env)`) rather than at import, so
+  tests and long-lived processes see environment changes; it is bounded to the store's
+  120-character actor label limit.
+- `bin/hof` resolves the repository from its own path, so it works from any cwd and
+  survives `PATH` entries that point at symlinks.

@@ -1,7 +1,12 @@
 import { config as loadEnv } from 'dotenv';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
+import { execFile, spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createInterface } from 'node:readline/promises';
 import type { Pool } from 'pg';
-import { EXIT, run, type Services } from '../src/cli/hof';
+import { EXIT, run, type Io, type Services } from '../src/cli/hof';
 import { createEmbeddingCache } from '../src/server/context/compiler/cache';
 import type { CompilerDeps } from '../src/server/context/compiler/compile';
 import { embeddingProviderFromEnv } from '../src/server/context/compiler/embedding';
@@ -48,6 +53,37 @@ const services: Services = {
     return compiler;
   },
   proposalModel: () => proposalModelFromEnv() ?? null,
+  // $EDITOR round trip on a temp file; the editor inherits the terminal.
+  editText: async (initial) => {
+    const editor = process.env.VISUAL || process.env.EDITOR || 'vi';
+    const dir = mkdtempSync(join(tmpdir(), 'hof-edit-'));
+    const file = join(dir, 'content.md');
+    try {
+      writeFileSync(file, initial);
+      const result = spawnSync(editor, [file], { stdio: 'inherit', shell: true });
+      if (result.status !== 0) throw new Error(`${editor} exited with status ${result.status}`);
+      return readFileSync(file, 'utf8');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  },
+  // First clipboard tool that exists wins; none → false so the caller can warn.
+  copy: async (text) => {
+    const candidates: Array<[string, string[]]> = [
+      ['pbcopy', []],
+      ['wl-copy', []],
+      ['xclip', ['-selection', 'clipboard']],
+    ];
+    for (const [command, args] of candidates) {
+      const ok = await new Promise<boolean>((resolve) => {
+        const child = execFile(command, args, (error) => resolve(!error));
+        child.on('error', () => resolve(false));
+        child.stdin?.end(text);
+      });
+      if (ok) return true;
+    }
+    return false;
+  },
   serve: async () => {
     const provider = embeddingProviderFromEnv();
     const proposalModel = proposalModelFromEnv();
@@ -74,11 +110,20 @@ const services: Services = {
   },
 };
 
-const io = {
-  stdout: (text: string) => process.stdout.write(text),
-  stderr: (text: string) => process.stderr.write(text),
+const io: Io = {
+  stdout: (text) => void process.stdout.write(text),
+  stderr: (text) => void process.stderr.write(text),
   cwd: process.cwd(),
   env: process.env,
+  isTTY: Boolean(process.stdin.isTTY && process.stdout.isTTY),
+  prompt: async (question) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      return (await rl.question(question)).trim();
+    } finally {
+      rl.close();
+    }
+  },
   readStdin: () =>
     new Promise<string>((resolve) => {
       let buffer = '';

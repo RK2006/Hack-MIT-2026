@@ -1,0 +1,5 @@
+#!/bin/sh
+# PATH-friendly launcher: `export PATH="<repo>/bin:$PATH"` works without `npm link` or a
+# writable global npm prefix. Resolves the repository from this file's location.
+here=$(cd "$(dirname "$0")" && pwd -P)
+exec node "$here/../scripts/hof.js" "$@"

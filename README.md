@@ -52,22 +52,45 @@ To use OpenAI instead, set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY`
 directory once, then explore, check out task context, and review proposals
 without typing UUIDs:
 
+Install one of three ways (all need `npm install` in this checkout first):
+
 ```bash
-npm link                    # optional: installs a `hof` binary; otherwise use `npm run hof -- …`
+export PATH="$PWD/bin:$PATH"   # simplest: add to ~/.zshrc; no npm permissions involved
+npm link                       # or: a global `hof` binary (needs a writable global npm prefix)
+npm run hof -- <command>       # or: no install at all
+```
+
+Then, from any directory:
+
+```bash
 hof use "Demo Payments"     # writes .hof/project (git-ignored); --project/-p or HOF_PROJECT also work
 hof status                  # counts: nodes, relationships, canonical/inferred, pending review, archived
 hof ls --type constraint    # also --inferred, --archived, --grep <text>
 hof show component.stripe-webhooks     # node refs: UUID prefix (≥ 8 chars), external key, or path
 hof log 3a17141a && hof diff 3a17141a 1 2
-hof checkout "Fix duplicate Stripe webhook processing" --budget 2048 | pbcopy
+
+hof checkout "Fix duplicate Stripe webhook processing" --budget 2048 --copy
                             # stdout = exact context text; stderr = ranked selection with reasons
 claude -p "$(hof checkout 'Fix duplicate Stripe webhook processing')"
+
 hof pending                 # agent proposals not yet reviewed
+hof review --note "Batch review"     # interactive: (a)ccept (r)eject (e)dit-in-$EDITOR (s)kip (q)uit
 hof accept 3a17141a --note "Confirmed against staging"   # → canonical v2, operator provenance
 hof reject 773d49cb         # → archived
+
+hof note decision "Retry webhooks asynchronously" --content @notes.md --summary "Queue retries" \
+  --link component.stripe-webhooks --edge AFFECTS -m "Decided in standup" --evidence "See ADR draft"
+hof edit decision.async-retries --importance 4 -m "Raised priority" --evidence "Incident 2026-09-19"
+hof archive 95176389 -m "Obsolete" --evidence "Admin sessions removed in PR #12"; hof restore 95176389 -m … --evidence …
+
 hof propose notes.md --task "…"; hof ingest pr <url>; hof ingest docs .   # LLM key required
 hof serve                   # stdio MCP server (same as `npm run mcp`)
 ```
+
+`--content` takes literal text, `@file`, or `-` (stdin). Authoring commands require
+`-m "<reason>"` and `--evidence "<note>"`, which become the revision's change reason
+and its manual source. On a shared database set `OPERATOR_LABEL=<your name>` in
+`.env` so revisions say who made them (default `local-operator`).
 
 Every command takes `--json`. Exit codes: `0` ok, `1` domain error (`CODE: message`),
 `2` usage / no project bound, `3` environment (database or model key). See

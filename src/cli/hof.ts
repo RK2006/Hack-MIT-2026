@@ -5,13 +5,25 @@ import { ACCEPT_DEFAULTS, pendingReview, REJECT_DEFAULTS } from '../lib/review';
 import { compileContext, type CompilerDeps } from '../server/context/compiler/compile';
 import { REQUEST_LIMITS } from '../server/context/compiler/types';
 import { GraphError } from '../server/context/errors';
-import { NODE_TYPES, snapshotOf, type GraphStore, type NodeType } from '../server/context/types';
+import {
+  EDGE_TYPES,
+  NODE_TYPES,
+  snapshotOf,
+  type ContextNode,
+  type EdgeType,
+  type GraphStore,
+  type NodeType,
+} from '../server/context/types';
 import { importPreparedProject } from '../server/ingestion/import';
 import { ingestDocumentation } from '../server/ingestion/docs';
 import { ingestPullRequest } from '../server/ingestion/github-pr';
 import type { ProposalModel } from '../server/proposals/model';
 import { proposeContext } from '../server/proposals/propose';
-import { reviseOperatorNode } from '../server/workbench/mutations';
+import {
+  createOperatorNode,
+  reviseOperatorNode,
+  type CreateNodeRequest,
+} from '../server/workbench/mutations';
 import {
   formatBundleExplanation,
   formatDiff,
@@ -23,6 +35,7 @@ import {
   formatSource,
   formatStatus,
 } from './format';
+import { optionalNumber, readContentArg } from './input';
 import {
   projectIdFrom,
   resolveProject,
@@ -41,6 +54,10 @@ export type Io = {
   cwd: string;
   env: Env;
   readStdin: () => Promise<string>;
+  /** True when stdin is interactive; gates `review`. */
+  isTTY: boolean;
+  /** Asks one line; the answer is trimmed. */
+  prompt: (question: string) => Promise<string>;
 };
 
 /** Lazily constructed services so read-only commands never touch the embedding model or LLM key. */
@@ -50,6 +67,10 @@ export type Services = {
   proposalModel: () => ProposalModel | null;
   /** Runs the stdio MCP server until it closes; supplied by the script entry point. */
   serve?: () => Promise<void>;
+  /** Round-trips text through $EDITOR; resolves with the edited text. */
+  editText?: (initial: string) => Promise<string>;
+  /** Copies text to the clipboard; resolves false when no clipboard tool exists. */
+  copy?: (text: string) => Promise<boolean>;
 };
 
 type Options = ParseArgsConfig['options'];
@@ -276,13 +297,14 @@ export const COMMANDS: Record<string, Command> = {
   checkout: {
     summary: 'Compile task context: exact text on stdout, explanation on stderr',
     usage:
-      'hof checkout "<task>" [--budget N] [--depth N] [--start <node>]... [--degraded] [--explain]',
+      'hof checkout "<task>" [--budget N] [--depth N] [--start <node>]... [--degraded] [--explain] [--copy]',
     options: {
       budget: { type: 'string', short: 'b' },
       depth: { type: 'string', short: 'd' },
       start: { type: 'string', short: 's', multiple: true },
       degraded: { type: 'boolean' },
       explain: { type: 'boolean', short: 'e' },
+      copy: { type: 'boolean', short: 'c' },
     },
     run: async (ctx) => {
       const p = await project(ctx);
@@ -306,7 +328,239 @@ export const COMMANDS: Record<string, Command> = {
         ctx.io.stdout(bundle.contextText);
         ctx.io.stderr(`${explanation}\n`);
       }
+      if (values.copy) {
+        const copied = ctx.services.copy ? await ctx.services.copy(bundle.contextText) : false;
+        ctx.io.stderr(
+          copied
+            ? `copied ${bundle.tokenCount} tokens to the clipboard\n`
+            : 'warning: no clipboard tool found (pbcopy, wl-copy, or xclip); text is on stdout only\n',
+        );
+      }
       return EXIT.ok;
+    },
+  },
+  note: {
+    summary: 'Create a node by hand (canonical unless --inferred), optionally linked to another',
+    usage:
+      'hof note <type> "<title>" --content <text|@file|-> [--summary] [--key] [--path] [--importance N] [--confidence N] [--inferred] [--link <node> --edge <TYPE> [--incoming]] -m "<reason>" --evidence "<note>"',
+    options: {
+      content: { type: 'string', short: 'c' },
+      summary: { type: 'string', short: 's' },
+      key: { type: 'string', short: 'k' },
+      path: { type: 'string' },
+      importance: { type: 'string', short: 'i' },
+      confidence: { type: 'string' },
+      inferred: { type: 'boolean' },
+      link: { type: 'string', short: 'l' },
+      edge: { type: 'string' },
+      incoming: { type: 'boolean' },
+      message: { type: 'string', short: 'm' },
+      evidence: { type: 'string' },
+    },
+    run: async (ctx) => {
+      const p = await project(ctx);
+      const { values } = ctx.parsed;
+      const type = positional(ctx, 0, 'type');
+      if (!(NODE_TYPES as readonly string[]).includes(type))
+        throw usageError(`<type> must be one of ${NODE_TYPES.join(', ')}`);
+      const title = positional(ctx, 1, 'title');
+      const rawContent = str(values, 'content');
+      if (rawContent === undefined) throw usageError('--content is required (text, @file, or -)');
+      const { changeReason, evidenceNote } = operatorEvidence(ctx);
+      const node: CreateNodeRequest['node'] = {
+        type: type as NodeType,
+        title,
+        content: await readContentArg(rawContent, ctx.io.readStdin),
+        authority: values.inferred ? 'inferred' : 'canonical',
+      };
+      const summary = str(values, 'summary');
+      if (summary !== undefined) node.summary = summary;
+      const key = str(values, 'key');
+      if (key) node.externalKey = key;
+      const path = str(values, 'path');
+      if (path) node.path = path;
+      const importance = optionalNumber(str(values, 'importance'), 'importance');
+      if (importance !== undefined) node.importance = importance;
+      const confidence = optionalNumber(str(values, 'confidence'), 'confidence');
+      if (confidence !== undefined) node.confidence = confidence;
+      const payload: CreateNodeRequest = { changeReason, evidenceNote, node };
+      const link = str(values, 'link');
+      if (link) {
+        const edgeType = str(values, 'edge');
+        if (!edgeType || !(EDGE_TYPES as readonly string[]).includes(edgeType))
+          throw usageError(`--link needs --edge <${EDGE_TYPES.join('|')}>`);
+        const { nodes } = await allNodes(ctx.services.store, p.id);
+        payload.edge = {
+          otherNodeId: resolveNodeRef(link, nodes).id,
+          type: edgeType as EdgeType,
+          direction: values.incoming ? 'incoming' : 'outgoing',
+          authority: values.inferred ? 'inferred' : 'canonical',
+        };
+      }
+      const result = await createOperatorNode(ctx.services.store, p.id, payload);
+      const edgeText = result.edge
+        ? ` · edge ${result.edge.fromNodeId === result.node.id ? 'this' : shortId(result.edge.fromNodeId)} → ${result.edge.type} → ${result.edge.toNodeId === result.node.id ? 'this' : shortId(result.edge.toNodeId)}`
+        : '';
+      emit(
+        ctx,
+        `Created ${shortId(result.node.id)} ${result.node.type} "${result.node.current.title}" (${result.node.current.authority} v1)${edgeText}`,
+        result,
+      );
+      return EXIT.ok;
+    },
+  },
+  edit: {
+    summary: 'Revise fields of a node as a new revision',
+    usage:
+      'hof edit <node> [--title] [--content <text|@file|->] [--summary] [--importance N] [--confidence N] [--canonical|--inferred] -m "<reason>" --evidence "<note>"',
+    options: {
+      title: { type: 'string', short: 't' },
+      content: { type: 'string', short: 'c' },
+      summary: { type: 'string', short: 's' },
+      importance: { type: 'string', short: 'i' },
+      confidence: { type: 'string' },
+      canonical: { type: 'boolean' },
+      inferred: { type: 'boolean' },
+      message: { type: 'string', short: 'm' },
+      evidence: { type: 'string' },
+    },
+    run: async (ctx) => {
+      const p = await project(ctx);
+      const { values } = ctx.parsed;
+      const fields = [
+        'title',
+        'content',
+        'summary',
+        'importance',
+        'confidence',
+        'canonical',
+        'inferred',
+      ];
+      if (!fields.some((field) => values[field] !== undefined))
+        throw usageError(
+          `Give at least one field to change (${fields.map((f) => `--${f}`).join(', ')})`,
+        );
+      if (values.canonical && values.inferred) throw usageError('Choose --canonical or --inferred');
+      const { changeReason, evidenceNote } = operatorEvidence(ctx);
+      const { nodes } = await allNodes(ctx.services.store, p.id);
+      const node = resolveNodeRef(positional(ctx, 0, 'node'), nodes);
+      const current = proposedSnapshot(node);
+      const snapshot = { ...current };
+      const title = str(values, 'title');
+      if (title !== undefined) snapshot.title = title;
+      const content = str(values, 'content');
+      if (content !== undefined) snapshot.content = await readContentArg(content, ctx.io.readStdin);
+      const summary = str(values, 'summary');
+      if (summary !== undefined) snapshot.summary = summary;
+      const importance = optionalNumber(str(values, 'importance'), 'importance');
+      if (importance !== undefined) snapshot.importance = importance;
+      const confidence = optionalNumber(str(values, 'confidence'), 'confidence');
+      if (confidence !== undefined) snapshot.confidence = confidence;
+      if (values.canonical) snapshot.authority = 'canonical';
+      if (values.inferred) snapshot.authority = 'inferred';
+      if (sameSnapshot(current, snapshot)) {
+        emit(ctx, `${shortId(node.id)}: nothing changed; no revision recorded`, {
+          node: node.id,
+          changed: false,
+        });
+        return EXIT.ok;
+      }
+      const result = await reviseOperatorNode(ctx.services.store, p.id, node.id, {
+        expectedVersion: node.current.version,
+        changeReason,
+        evidenceNote,
+        snapshot,
+      });
+      emit(
+        ctx,
+        `${shortId(node.id)} "${result.node.current.title}" → v${result.node.current.version} (${result.node.current.authority})`,
+        result,
+      );
+      return EXIT.ok;
+    },
+  },
+  archive: {
+    summary: 'Archive nodes (they leave the active graph but keep their history)',
+    usage: 'hof archive <node>... -m "<reason>" --evidence "<note>"',
+    options: { message: { type: 'string', short: 'm' }, evidence: { type: 'string' } },
+    run: (ctx) => toggleArchived(ctx, true),
+  },
+  restore: {
+    summary: 'Restore archived nodes to the active graph',
+    usage: 'hof restore <node>... -m "<reason>" --evidence "<note>"',
+    options: { message: { type: 'string', short: 'm' }, evidence: { type: 'string' } },
+    run: (ctx) => toggleArchived(ctx, false),
+  },
+  review: {
+    summary: 'Step through pending proposals interactively: accept / reject / edit / skip / quit',
+    usage: 'hof review [--note "<why>"]',
+    options: { note: { type: 'string', short: 'n' } },
+    run: async (ctx) => {
+      const p = await project(ctx);
+      const graph = await ctx.services.store.getGraph(p.id);
+      const pending = pendingReview(graph.nodes);
+      if (!ctx.io.isTTY) {
+        ctx.io.stderr('hof review needs an interactive terminal; showing `hof pending` instead.\n');
+        ctx.io.stdout(`${formatPending(pending)}\n`);
+        return EXIT.usage;
+      }
+      if (pending.length === 0) {
+        ctx.io.stdout('No proposals waiting for review.\n');
+        return EXIT.ok;
+      }
+      const note = str(ctx.parsed.values, 'note')?.trim();
+      const tally = { accepted: 0, rejected: 0, edited: 0, skipped: 0, failed: 0 };
+      for (const [index, node] of pending.entries()) {
+        const source = await ctx.services.store.getSource(p.id, node.current.sourceId);
+        ctx.io.stdout(`\n[${index + 1}/${pending.length}] ${formatNode(node, graph, source)}\n\n`);
+        let answer = '';
+        while (!['a', 'r', 'e', 's', 'q'].includes(answer)) {
+          answer = (
+            await ctx.io.prompt('(a)ccept  (r)eject  (e)dit then accept  (s)kip  (q)uit > ')
+          )
+            .trim()
+            .toLowerCase()
+            .slice(0, 1);
+        }
+        if (answer === 'q') break;
+        if (answer === 's') {
+          tally.skipped += 1;
+          continue;
+        }
+        try {
+          if (answer === 'e') {
+            if (!ctx.services.editText) throw usageError('No editor available in this environment');
+            const content = (await ctx.services.editText(node.current.content)).trim();
+            if (!content) throw new GraphError('VALIDATION_ERROR', 'Edited content is empty');
+            const snapshot = proposedSnapshot(node);
+            await reviseOperatorNode(ctx.services.store, p.id, node.id, {
+              expectedVersion: node.current.version,
+              changeReason: 'Edited and accepted agent proposal',
+              evidenceNote: evidenceWithNote(
+                'Operator edited the agent proposal before accepting it as canonical.',
+                note,
+              ),
+              snapshot: { ...snapshot, content, authority: 'canonical', confidence: 1 },
+            });
+            tally.edited += 1;
+            ctx.io.stdout('✓ edited and accepted\n');
+          } else {
+            const decision = answer === 'a' ? 'accept' : 'reject';
+            const message = await applyDecision(ctx.services.store, p.id, node, decision, note);
+            tally[decision === 'accept' ? 'accepted' : 'rejected'] += 1;
+            ctx.io.stdout(`✓ ${message}\n`);
+          }
+        } catch (error) {
+          tally.failed += 1;
+          ctx.io.stdout(`✗ ${describe(error)}\n`);
+        }
+      }
+      emit(
+        ctx,
+        `accepted ${tally.accepted} · edited ${tally.edited} · rejected ${tally.rejected} · skipped ${tally.skipped} · failed ${tally.failed}`,
+        tally,
+      );
+      return tally.failed === 0 ? EXIT.ok : EXIT.domain;
     },
   },
   pending: {
@@ -410,43 +664,111 @@ export const COMMANDS: Record<string, Command> = {
   },
 };
 
-async function decide(ctx: Ctx, decision: 'accept' | 'reject'): Promise<number> {
-  const p = await project(ctx);
-  if (ctx.parsed.positionals.length === 0) throw usageError('Give at least one <node>');
-  const { nodes } = await allNodes(ctx.services.store, p.id);
+/** Snapshot without sourceId; the store's own equality check includes the fresh source, so compare here. */
+function proposedSnapshot(node: ContextNode) {
+  const { sourceId: _s, ...snapshot } = snapshotOf(node);
+  void _s;
+  return snapshot;
+}
+const sameSnapshot = (a: object, b: object) => JSON.stringify(a) === JSON.stringify(b);
+
+const evidenceWithNote = (base: string, note: string | undefined) =>
+  note ? `${base} Note: ${note}` : base;
+
+/** `-m` and `--evidence` are mandatory on authoring commands, like a commit message. */
+function operatorEvidence(ctx: Ctx): { changeReason: string; evidenceNote: string } {
+  const changeReason = str(ctx.parsed.values, 'message')?.trim();
+  const evidenceNote = str(ctx.parsed.values, 'evidence')?.trim();
+  if (!changeReason) throw usageError('-m "<reason>" is required');
+  if (!evidenceNote) throw usageError('--evidence "<note>" is required (stored as the source)');
+  return { changeReason, evidenceNote };
+}
+
+/** One accept/reject revision; shared by `accept`, `reject`, and `review`. */
+async function applyDecision(
+  store: GraphStore,
+  projectId: string,
+  node: ContextNode,
+  decision: 'accept' | 'reject',
+  note: string | undefined,
+): Promise<string> {
   const defaults = decision === 'accept' ? ACCEPT_DEFAULTS : REJECT_DEFAULTS;
-  const note = str(ctx.parsed.values, 'note')?.trim();
-  const evidenceNote = note ? `${defaults.evidenceNote} Note: ${note}` : defaults.evidenceNote;
-  const results: Array<{ ref: string; nodeId?: string; ok: boolean; message: string }> = [];
+  const current = proposedSnapshot(node);
+  const next =
+    decision === 'accept'
+      ? { ...current, authority: 'canonical' as const, confidence: 1 }
+      : { ...current, archived: true };
+  const state = decision === 'accept' ? 'canonical' : 'archived';
+  if (sameSnapshot(current, next))
+    return `${shortId(node.id)} ${node.current.title}: already ${state}`;
+  const result = await reviseOperatorNode(store, projectId, node.id, {
+    expectedVersion: node.current.version,
+    changeReason: defaults.changeReason,
+    evidenceNote: evidenceWithNote(defaults.evidenceNote, note),
+    snapshot: next,
+  });
+  return `${shortId(node.id)} ${node.current.title} → v${result.node.current.version} ${state}`;
+}
+
+type RefResult = { ref: string; nodeId?: string; ok: boolean; message: string };
+
+/** Runs `work` for every positional node ref, continuing past failures; exit 1 if any failed. */
+async function forEachRef(
+  ctx: Ctx,
+  nodes: ContextNode[],
+  work: (node: ContextNode) => Promise<string>,
+  data: Record<string, unknown>,
+): Promise<number> {
+  if (ctx.parsed.positionals.length === 0) throw usageError('Give at least one <node>');
+  const results: RefResult[] = [];
   for (const ref of ctx.parsed.positionals) {
     try {
       const node = resolveNodeRef(ref, nodes);
-      const { sourceId: _s, ...snapshot } = snapshotOf(node);
-      void _s;
-      const result = await reviseOperatorNode(ctx.services.store, p.id, node.id, {
-        expectedVersion: node.current.version,
-        changeReason: defaults.changeReason,
-        evidenceNote,
-        snapshot:
-          decision === 'accept'
-            ? { ...snapshot, authority: 'canonical', confidence: 1 }
-            : { ...snapshot, archived: true },
-      });
-      const message = result.changed
-        ? `${shortId(node.id)} ${node.current.title} → v${result.node.current.version} ${
-            decision === 'accept' ? 'canonical' : 'archived'
-          }`
-        : `${shortId(node.id)} ${node.current.title}: already ${decision === 'accept' ? 'canonical' : 'archived'}`;
-      results.push({ ref, nodeId: node.id, ok: true, message });
+      results.push({ ref, nodeId: node.id, ok: true, message: await work(node) });
     } catch (error) {
       results.push({ ref, ok: false, message: describe(error) });
     }
   }
   emit(ctx, results.map((r) => `${r.ok ? '✓' : '✗'} ${r.message}`).join('\n'), {
-    decision,
+    ...data,
     results,
   });
   return results.every((r) => r.ok) ? EXIT.ok : EXIT.domain;
+}
+
+async function decide(ctx: Ctx, decision: 'accept' | 'reject'): Promise<number> {
+  const p = await project(ctx);
+  const { nodes } = await allNodes(ctx.services.store, p.id);
+  const note = str(ctx.parsed.values, 'note')?.trim();
+  return forEachRef(
+    ctx,
+    nodes,
+    (node) => applyDecision(ctx.services.store, p.id, node, decision, note),
+    { decision },
+  );
+}
+
+async function toggleArchived(ctx: Ctx, archived: boolean): Promise<number> {
+  const p = await project(ctx);
+  const { changeReason, evidenceNote } = operatorEvidence(ctx);
+  const { nodes } = await allNodes(ctx.services.store, p.id);
+  const state = archived ? 'archived' : 'restored';
+  return forEachRef(
+    ctx,
+    nodes,
+    async (node) => {
+      if (node.current.archived === archived)
+        return `${shortId(node.id)} ${node.current.title}: already ${state}`;
+      const result = await reviseOperatorNode(ctx.services.store, p.id, node.id, {
+        expectedVersion: node.current.version,
+        changeReason,
+        evidenceNote,
+        snapshot: { ...proposedSnapshot(node), archived },
+      });
+      return `${shortId(node.id)} ${node.current.title} → v${result.node.current.version} ${state}`;
+    },
+    { action: state },
+  );
 }
 
 function describe(error: unknown): string {

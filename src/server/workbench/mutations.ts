@@ -12,8 +12,17 @@ import {
   type GraphStore,
 } from '../context/types';
 
-/** Every workbench write is attributed to the local human operator; payloads cannot choose it. */
-export const OPERATOR_ACTOR: Actor = { kind: 'human', label: 'local-operator' };
+export const DEFAULT_OPERATOR_LABEL = 'local-operator';
+
+/**
+ * Every workbench/CLI write is attributed to the human operator running the process; payloads
+ * cannot choose it. On a shared database, OPERATOR_LABEL distinguishes teammates. The label is
+ * attribution, not authentication.
+ */
+export function operatorActor(env: Record<string, string | undefined> = process.env): Actor {
+  const label = env.OPERATOR_LABEL?.trim().slice(0, 120);
+  return { kind: 'human', label: label || DEFAULT_OPERATOR_LABEL };
+}
 
 const operatorEvidence = {
   evidenceNote: z.string().min(1).max(20_000),
@@ -111,7 +120,7 @@ export async function createOperatorNode(
     const node = await tx.createNode(projectId, {
       ...(provided as CreateNodeInput),
       sourceId: source.id,
-      actor: OPERATOR_ACTOR,
+      actor: operatorActor(),
       changeReason: req.changeReason,
     });
     let edge: ContextEdge | null = null;
@@ -123,7 +132,7 @@ export async function createOperatorNode(
         type: req.edge.type,
         authority: req.edge.authority,
         sourceId: source.id,
-        actor: OPERATOR_ACTOR,
+        actor: operatorActor(),
       });
     }
     return { node, edge };
@@ -143,7 +152,7 @@ export async function reviseOperatorNode(
     return tx.reviseNode(projectId, nodeId, {
       expectedVersion: req.expectedVersion,
       snapshot: { ...req.snapshot, sourceId: source.id },
-      actor: OPERATOR_ACTOR,
+      actor: operatorActor(),
       changeReason: req.changeReason,
     });
   });
