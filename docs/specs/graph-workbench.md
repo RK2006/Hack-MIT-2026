@@ -108,6 +108,13 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       lines by default with a "Show full excerpt" toggle; use upright body type, not
       italic, for multi-line excerpts. The parser is a pure function in
       `src/lib/excerpt.ts` covered by `tests/workbench/excerpt.test.ts`.
+- [x] W2b: Agent inputs are frequently Markdown. The excerpt parser additionally
+      recognises ATX headings (`#`–`######`, rendered as small headings), `>` block
+      quotes, fenced code blocks (```` ``` ````), numbered lists (`1.`/`1)`), and inline
+      `**bold**` / `` `code` `` spans. Rendering stays text-only React (no HTML, no
+      links from Markdown syntax; only the source locator may be a link), so untrusted
+      excerpts cannot inject markup. Unrecognised syntax falls through as plain text.
+      The CLI's `hof show`/`hof source` share the parser and print the same structure.
 - [x] W3: Support manual node creation, editing, review, archive/unarchive, with
       foundation validation, fresh manual evidence, and expected-version conflicts.
 - [x] W4: Display archived nodes in a separate list/detail/history path so they
