@@ -1,24 +1,30 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import HandoffSketch from './HandoffSketch';
 
 const LEAVE_MS = 720;
 
 /**
- * The cover sits over the already-rendered project list. Begin lifts it: the paper fades and
- * drifts up, the list beneath is revealed in place, no navigation. Shown on every visit to `/`.
+ * The cover is the front page (`/`). Begin lifts it: the paper fades and drifts up, then the
+ * project list at `/projects` takes its place (that page fades in). `/projects` links back here.
  */
 export default function Cover() {
-  const [phase, setPhase] = useState<'idle' | 'leaving' | 'gone'>('idle');
+  const router = useRouter();
+  const [phase, setPhase] = useState<'idle' | 'leaving'>('idle');
   const beginRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    router.prefetch('/projects');
+  }, [router]);
 
   useEffect(() => {
     if (phase !== 'leaving') return;
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const timer = window.setTimeout(() => setPhase('gone'), reduced ? 0 : LEAVE_MS);
+    const timer = window.setTimeout(() => router.push('/projects'), reduced ? 0 : LEAVE_MS);
     return () => window.clearTimeout(timer);
-  }, [phase]);
+  }, [phase, router]);
 
   useEffect(() => {
     if (phase !== 'idle') return;
@@ -28,8 +34,6 @@ export default function Cover() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [phase]);
-
-  if (phase === 'gone') return null;
 
   return (
     <div className={phase === 'leaving' ? 'cover leaving' : 'cover'} data-cover>

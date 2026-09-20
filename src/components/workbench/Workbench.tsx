@@ -132,7 +132,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
   return (
     <div className="workbench">
       <header className="topbar">
-        <Link href="/">← Projects</Link>
+        <Link href="/projects">← Projects</Link>
         <h1>{graph?.project.name ?? 'Loading project…'}</h1>
         <nav className="tabs" aria-label="View">
           {(['graph', 'list', 'review', 'archived'] as View[]).map((option) => (
@@ -178,7 +178,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
               {graphError.startsWith('NOT_FOUND') ? (
                 <>
                   {' '}
-                  — <Link href="/">back to projects</Link>
+                  — <Link href="/projects">back to projects</Link>
                 </>
               ) : null}
             </p>

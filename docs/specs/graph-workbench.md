@@ -118,12 +118,13 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       show counted tokens/omissions/degraded status, and copy context text exactly.
 - [x] W7: Preserve editable user input on failures; avoid displaying a previous
       successful bundle as if it belonged to a failed or still-running request.
-- [x] W9: `/` opens on a cover — the product name "Handoff", one line, a Begin
-      control, and a once-drawn SVG sketch of the mechanism (graph inked → the task's
-      nodes marked → gathered into a bundle → handed off). The project list is
-      server-rendered beneath it; Begin (click or Enter) fades and lifts the cover
-      in place with no navigation. Shown on every visit; honors
-      `prefers-reduced-motion` (sketch settles instantly, cover leaves instantly).
+- [x] W9: `/` is the cover — the product name "Handoff", a punchline, one plain
+      line, a Begin control, and a once-drawn SVG sketch of the mechanism (graph
+      inked → the task's nodes marked → gathered into a bundle → handed off).
+      Begin (click or Enter) fades and lifts the cover, then navigates to
+      `/projects`, the project list, which fades in and carries a "← Handoff" link
+      back to the cover; the workbench's back links target `/projects`. Honors
+      `prefers-reduced-motion` (sketch settles instantly, navigation is immediate).
       `src/components/home/Cover.tsx`, `HandoffSketch.tsx`, styles under "Cover" in
       `globals.css`.
 - [x] W8: Provide a review queue of agent-authored inferred nodes with one-click
