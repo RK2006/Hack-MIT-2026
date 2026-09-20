@@ -39,6 +39,7 @@ const modelJson = JSON.stringify({
       summary: '',
       importance: 3,
       confidence: 0.8,
+      evidence: 'one-click accept/reject',
     },
   ],
   edges: [{ fromKey: 'review-queue-derived', toKey: 'component.workbench', type: 'AFFECTS' }],

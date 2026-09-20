@@ -44,6 +44,7 @@ const proposalJson = JSON.stringify({
       summary: 'Retries overlap in time across workers.',
       importance: 4,
       confidence: 0.95,
+      evidence: 'two workers processed evt_123 within 200 ms',
     },
     {
       key: 'claim-before-charge',
@@ -54,6 +55,7 @@ const proposalJson = JSON.stringify({
       summary: '',
       importance: 5,
       confidence: 0.8,
+      evidence: 'fix claims the receipt first',
     },
   ],
   edges: [
@@ -119,7 +121,7 @@ describe('agent context proposals against PostgreSQL', () => {
       expect(node.current.authority).toBe('inferred');
       expect(node.current.actor).toEqual({ kind: 'agent', label: 'fixed:reviewer' });
       expect(node.current.confidence).toBeLessThanOrEqual(0.7);
-      expect(node.current.sourceId).toBe(result.sourceId);
+      expect(node.current.sourceId).not.toBe(result.sourceId);
       expect(node.externalKey).toMatch(/^agent\.[a-z-]+-[0-9a-f]{8}$/);
       expect(node.current.changeReason).toContain(DEMO_TASK);
     }
@@ -127,11 +129,76 @@ describe('agent context proposals against PostgreSQL', () => {
     expect(source.kind).toBe('agent');
     expect(source.excerpt).toContain('[fixed:reviewer]');
     expect(source.excerpt).toContain('evt_123');
+    // Each claim cites its own supporting quote, pointing back at the batch source.
+    const nodeSource = await store.getSource(
+      DEMO_PROJECT_ID,
+      (await store.getNode(DEMO_PROJECT_ID, result.created.nodes[0]!.nodeId)).current.sourceId,
+    );
+    expect(nodeSource.excerpt).toBe(
+      `[fixed:reviewer] Supporting quote: "two workers processed evt_123 within 200 ms"\n\nFull input recorded in source ${source.id}.`,
+    );
+    expect(nodeSource.uri).toBe(source.uri);
+    expect(result.created.nodes.map((n) => n.evidence)).toEqual([
+      'two workers processed evt_123 within 200 ms',
+      'fix claims the receipt first',
+    ]);
     expect(
       graph.edges
         .filter((e) => e.sourceId === result.sourceId)
         .every((e) => e.authority === 'inferred'),
     ).toBe(true);
+  });
+
+  it('discards claims whose supporting quote is not in the input (grounding)', async () => {
+    const before = await store.getGraph(DEMO_PROJECT_ID);
+    const result = await proposeContext(
+      {
+        store,
+        model: fixedProposalModel(
+          JSON.stringify({
+            nodes: [
+              {
+                key: 'hallucinated-claim',
+                type: 'decision',
+                title: 'Use Kafka for receipts',
+                content: 'Receipts flow through Kafka.',
+                summary: '',
+                importance: 3,
+                confidence: 0.9,
+                evidence: 'we migrated receipts to Kafka last quarter',
+              },
+              {
+                key: 'grounded-claim',
+                type: 'discovery',
+                title: 'Two workers raced',
+                content: 'Two workers processed the same event.',
+                summary: '',
+                importance: 3,
+                confidence: 0.9,
+                evidence: 'Two Workers Processed EVT_123',
+              },
+            ],
+            edges: [
+              {
+                fromKey: 'hallucinated-claim',
+                toKey: 'component.stripe-webhooks',
+                type: 'AFFECTS',
+              },
+            ],
+          }),
+        ),
+      },
+      DEMO_PROJECT_ID,
+      { text },
+    );
+    expect(result.created.nodes.map((n) => n.title)).toEqual(['Two workers raced']);
+    expect(result.dropped).toEqual(
+      expect.arrayContaining([
+        { kind: 'node', reason: 'evidence quote not found in input', ref: 'hallucinated-claim' },
+        expect.objectContaining({ kind: 'edge', reason: 'unresolved endpoint key' }),
+      ]),
+    );
+    expect((await store.getGraph(DEMO_PROJECT_ID)).nodes.length).toBe(before.nodes.length + 1);
   });
 
   it('does not duplicate a node whose key already exists in the graph', async () => {
@@ -150,6 +217,7 @@ describe('agent context proposals against PostgreSQL', () => {
                 summary: '',
                 importance: 3,
                 confidence: 0.5,
+                evidence: 'Incident notes',
               },
             ],
             edges: [],
@@ -198,6 +266,7 @@ describe('agent context proposals against PostgreSQL', () => {
                   summary: '',
                   importance: 3,
                   confidence: 0.5,
+                  evidence: 'x',
                 },
               ],
               edges: [],

@@ -9,6 +9,7 @@ export const PROPOSAL_LIMITS = {
   maxEdges: 12,
   maxConfidence: 0.7,
   excerptMax: 2_000,
+  quoteMax: 600,
 } as const;
 
 export const PROPOSAL_NODE_TYPES = [
@@ -62,6 +63,8 @@ export const modelProposalSchema = z
             summary: z.string().trim().max(300).default(''),
             importance: z.number().int().min(1).max(5),
             confidence: z.number().min(0).max(1),
+            /** Verbatim quote from the input that supports the claim; checked against the input before writing. */
+            evidence: z.string().trim().min(1).max(PROPOSAL_LIMITS.quoteMax),
           })
           .strict(),
       )
@@ -92,8 +95,9 @@ export function buildProposalPrompt(
   const system = [
     'You extract durable engineering knowledge from notes about completed software work.',
     'Return ONLY a JSON object, no prose, matching exactly:',
-    '{"nodes":[{"key":"short-slug","type":"decision|constraint|assumption|discovery|bug","title":"...","content":"...","summary":"...","importance":1-5,"confidence":0-1}],"edges":[{"fromKey":"...","toKey":"...","type":"DEPENDS_ON|IMPLEMENTS|REQUIRES|CONSTRAINS|AFFECTS|CAUSED_BY|RELATED_TO"}]}',
+    '{"nodes":[{"key":"short-slug","type":"decision|constraint|assumption|discovery|bug","title":"...","content":"...","summary":"...","importance":1-5,"confidence":0-1,"evidence":"verbatim quote from the input"}],"edges":[{"fromKey":"...","toKey":"...","type":"DEPENDS_ON|IMPLEMENTS|REQUIRES|CONSTRAINS|AFFECTS|CAUSED_BY|RELATED_TO"}]}',
     `Rules: at most ${PROPOSAL_LIMITS.maxNodes} nodes and ${PROPOSAL_LIMITS.maxEdges} edges; every claim must be supported by the input text;`,
+    `"evidence" must be an exact, contiguous quote copied from the input (at most ${PROPOSAL_LIMITS.quoteMax} characters) that supports the claim — nodes whose quote is not found in the input are discarded;`,
     'do not restate code line by line; prefer decisions, constraints, discovered facts, and bugs;',
     'keys are lowercase slugs unique in your response; edge endpoints are your keys or existing node keys from the list;',
     'edge direction follows the type: A DEPENDS_ON B, A REQUIRES B, A CONSTRAINS B (A limits B), A IMPLEMENTS B, A AFFECTS B, A CAUSED_BY B (B causes A).',
@@ -139,4 +143,12 @@ export function parseModelProposal(raw: string): ModelProposal {
     keys.add(node.key);
   }
   return result.data;
+}
+
+const collapse = (text: string) => text.replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** True when the quote appears in the input, ignoring whitespace runs and case. */
+export function quoteAppearsIn(quote: string, input: string): boolean {
+  const needle = collapse(quote);
+  return needle.length > 0 && collapse(input).includes(needle);
 }

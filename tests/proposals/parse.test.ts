@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { GraphError } from '../../src/server/context/errors';
-import { buildProposalPrompt, parseModelProposal } from '../../src/server/proposals/prompt';
+import {
+  buildProposalPrompt,
+  parseModelProposal,
+  quoteAppearsIn,
+} from '../../src/server/proposals/prompt';
 import { makeGraph, makeNode } from '../compiler/fixture';
 
 const valid = {
@@ -13,6 +17,7 @@ const valid = {
       summary: 'Claim-after-charge race.',
       importance: 4,
       confidence: 0.9,
+      evidence: 'the handler writes the receipt after charging',
     },
   ],
   edges: [{ fromKey: 'receipt-claim-race', toKey: 'component.stripe-webhooks', type: 'AFFECTS' }],
@@ -108,5 +113,15 @@ describe('buildProposalPrompt', () => {
     expect(prompt.user).not.toContain('SECRET-CONTENT');
     expect(prompt.user).toContain('Fix duplicates');
     expect(prompt.system).toContain('"nodes"');
+  });
+});
+
+describe('quoteAppearsIn', () => {
+  it('matches verbatim quotes ignoring whitespace runs and case', () => {
+    const input = 'Receipts must be kept\n  at least 90 days for audit.';
+    expect(quoteAppearsIn('kept at least 90 days', input)).toBe(true);
+    expect(quoteAppearsIn('KEPT AT LEAST 90 DAYS', input)).toBe(true);
+    expect(quoteAppearsIn('kept at least 30 days', input)).toBe(false);
+    expect(quoteAppearsIn('   ', input)).toBe(false);
   });
 });
