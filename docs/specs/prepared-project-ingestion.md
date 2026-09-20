@@ -58,7 +58,10 @@ resolution, embedding calls, or executing imported code.
 
 The digest of original manifest bytes (`sha256:<hex>`) pins repository-type
 evidence for the prepared example. Evidence URIs use `repo://demo-payments/...`;
-curator notes explicitly say “synthetic prepared example.” A new manifest version
+curator notes explicitly say “synthetic prepared example.” That label is
+validated only for projects whose name contains “synthetic”; manifests produced
+by the [repository scanner](repository-scan.md) or curated for real repositories
+are exempt. A new manifest version
 does not update an existing project: edit knowledge through the workbench or give
 the manifest a new project UUID to create a separate project.
 

@@ -86,6 +86,19 @@ npm run propose -- 7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101 notes.md --task "Fix dup
 Proposals appear in the workbench with the inferred badge and agent evidence; review them
 canonical or archive them. Agents can never write canonical knowledge.
 
+## Scan a real repository
+
+Import the structure of any local git checkout as a new canonical project (directories → components,
+tracked source files → File nodes; nothing is executed or analyzed):
+
+```bash
+npm run scan:repo -- /path/to/repo --import            # or --out scan.json to inspect first
+npm run scan:repo -- . --import --include src --depth 2
+```
+
+Also available to agents as the MCP tool `scan_repository`. Knowledge is then layered on with PR
+ingestion, agent proposals, and human review.
+
 ## GitHub pull requests → knowledge
 
 With `gh` logged in and an LLM key in `.env`, turn a PR into proposals whose evidence links to the PR:

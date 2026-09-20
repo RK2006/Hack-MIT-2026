@@ -100,6 +100,7 @@ Tools (input → structuredContent):
 | `compile_context` | `{ projectId: uuid, task: string, tokenBudget?: int (default 4096), startNodeIds?: uuid[], maxDepth?: int, allowDegraded?: boolean }` | `ContextBundle`            |
 | `get_node`        | `{ projectId: uuid, nodeId: uuid }`                                                                                                   | `ContextNode`              |
 | `get_source`      | `{ projectId: uuid, sourceId: uuid }`                                                                                                 | `Source`                   |
+| `scan_repository` | `{ path: string, name?, depth?, maxFiles?, include?[] }` (see [repository scan](repository-scan.md)) | `{ projectId, name, nodes, edges, sources, files, components, skipped, commit }` |
 | `ingest_pull_request` | `{ projectId: uuid, ref: string, repo?: string }` (see [GitHub PR ingestion](github-pr-ingestion.md); registered only with a proposal model) | `IngestResult`        |
 
 Tool descriptions tell the model that context items carry `[canonical]` /

@@ -23,7 +23,8 @@
     "mcp": "tsx scripts/mcp-server.ts",
     "propose": "tsx scripts/propose.ts",
     "ingest:pr": "tsx scripts/ingest-pr.ts",
-    "import:manifest": "tsx scripts/import-manifest.ts"
+    "import:manifest": "tsx scripts/import-manifest.ts",
+    "scan:repo": "tsx scripts/scan-repo.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

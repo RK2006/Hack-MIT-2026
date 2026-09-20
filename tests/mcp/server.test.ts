@@ -74,6 +74,7 @@ describe('context-graph MCP server', () => {
       'ingest_pull_request',
       'list_projects',
       'propose_context',
+      'scan_repository',
     ]);
     const compile = tools.find((t) => t.name === 'compile_context')!;
     expect(Object.keys(compile.inputSchema.properties ?? {})).toEqual(
@@ -87,6 +88,7 @@ describe('context-graph MCP server', () => {
     const mcp = await connectMcp(deps());
     const { tools } = await mcp.client.listTools();
     expect(tools.map((t) => t.name)).not.toContain('propose_context');
+    expect(tools.map((t) => t.name)).toContain('scan_repository');
     await mcp.close();
   });
 

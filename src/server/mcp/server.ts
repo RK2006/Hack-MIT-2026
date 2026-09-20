@@ -4,6 +4,8 @@ import { compileContext, type CompilerDeps } from '../context/compiler/compile';
 import { REQUEST_LIMITS } from '../context/compiler/types';
 import { GraphError } from '../context/errors';
 import { ingestPullRequest } from '../ingestion/github-pr';
+import { importPreparedProject } from '../ingestion/import';
+import { scanRepository } from '../ingestion/scan';
 import { proposeContext, type ProposalModel } from '../proposals/propose';
 
 export type McpDeps = CompilerDeps & {
@@ -138,6 +140,52 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
       run('get_source', async () =>
         ok((await deps.store.getSource(projectId, sourceId)) as unknown as Record<string, unknown>),
       ),
+  );
+
+  server.registerTool(
+    'scan_repository',
+    {
+      title: 'Scan a local repository into a new project',
+      description:
+        'Deterministically import the structure of a local git checkout (directories as components, tracked source files as File nodes) as a new canonical project. ' +
+        'No code is executed or analyzed. Returns the project id to use with the other tools. Re-scanning the same repository is a conflict; use the existing project instead.',
+      inputSchema: z.object({
+        path: z.string().min(1).max(1000).describe('Absolute path to the root of a git work tree'),
+        name: z.string().min(1).max(120).optional(),
+        depth: z
+          .number()
+          .int()
+          .min(0)
+          .max(6)
+          .optional()
+          .describe('Directory depth that becomes components (default 2)'),
+        maxFiles: z.number().int().min(1).max(1000).optional(),
+        include: z
+          .array(z.string().min(1).max(500))
+          .max(20)
+          .optional()
+          .describe('Path prefixes to keep'),
+      }),
+    },
+    async ({ path, name, depth, maxFiles, include }) =>
+      run('scan_repository', async () => {
+        const { manifest, stats } = await scanRepository(path, { name, depth, maxFiles, include });
+        const imported = await importPreparedProject(
+          Buffer.from(JSON.stringify(manifest)),
+          deps.store,
+        );
+        return ok({
+          projectId: imported.projectId,
+          name: manifest.project.name,
+          nodes: imported.nodes,
+          edges: imported.edges,
+          sources: imported.sources,
+          files: stats.files,
+          components: stats.components,
+          skipped: stats.skipped,
+          commit: stats.commit,
+        });
+      }),
   );
 
   if (deps.proposalModel) {
