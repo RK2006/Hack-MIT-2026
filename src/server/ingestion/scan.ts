@@ -19,6 +19,12 @@ export type ScanOptions = {
   maxFiles?: number | undefined;
   /** Path prefixes to keep (repeatable); empty keeps everything. */
   include?: string[] | undefined;
+  /**
+   * `source` (default): code and documentation only — repo plumbing (dot-directories such as
+   * .github/.claude/.agents/.vscode, root config files, CI/tool manifests) is skipped.
+   * `all`: every allow-listed file.
+   */
+  files?: 'source' | 'all' | undefined;
   run?: CommandRunner | undefined;
 };
 
@@ -78,6 +84,20 @@ const SKIP_BASENAMES = new Set([
   '.DS_Store',
 ]);
 const SKIP_PATTERNS = [/\.min\.(js|css)$/, /\.(snap|map)$/];
+const CONFIG_EXTENSIONS = new Set(['json', 'yaml', 'yml', 'toml', 'mjs', 'cjs']);
+const CONFIG_BASENAMES =
+  /^(\.[a-z0-9._-]+|.*\.config\.[a-z]+|tsconfig.*\.json|package\.json|components\.json|docker-compose\.ya?ml|compose\.ya?ml|vercel\.json|netlify\.toml|renovate\.json|lerna\.json|nx\.json|turbo\.json|jest\.config\..+|vitest\.config\..+|babel\.config\..+|\.eslintrc.*|\.prettierrc.*)$/i;
+
+/** Repository plumbing that rarely deserves a node: dot-directories and root config/tool manifests. */
+function isPlumbing(path: string): boolean {
+  const segments = path.split('/');
+  if (segments.slice(0, -1).some((dir) => dir.startsWith('.'))) return true;
+  const base = basename(path);
+  if (CONFIG_BASENAMES.test(base)) return true;
+  const ext = base.includes('.') ? base.slice(base.lastIndexOf('.') + 1).toLowerCase() : '';
+  // Root-level or top-level config data files (tsconfig, package manifests, CI matrices…).
+  return segments.length <= 2 && CONFIG_EXTENSIONS.has(ext) && !/^readme|^changelog/i.test(base);
+}
 
 const runCommand: CommandRunner = (command, args, cwd) =>
   new Promise((done) => {
@@ -115,9 +135,10 @@ function languageOf(path: string): string | null {
   return LANGUAGES[ext] ?? null;
 }
 
-function isKeepable(path: string): boolean {
+function isKeepable(path: string, mode: 'source' | 'all'): boolean {
   const base = basename(path);
   if (SKIP_BASENAMES.has(base) || SKIP_PATTERNS.some((p) => p.test(base))) return false;
+  if (mode === 'source' && isPlumbing(path)) return false;
   if (
     path.includes('\\') ||
     path.includes('\0') ||
@@ -220,7 +241,7 @@ export async function scanRepository(
       skipped += 1;
       continue;
     }
-    if (!isKeepable(path)) {
+    if (!isKeepable(path, options.files ?? 'source')) {
       skipped += 1;
       continue;
     }
@@ -348,7 +369,7 @@ export async function scanRepository(
         kind: 'repository',
         uri: httpsRemote ?? `repo://${slugOf(name)}/`,
         label: `Structural scan of ${name}`,
-        excerpt: `Deterministic structural scan of the git work tree${commit ? ` at commit ${commit}` : ''}: tracked source files (allow-listed extensions, ≤ 1 MiB) became File nodes and directories up to depth ${depth} became components. File content records language, line count, byte size, and any leading comment; no code was executed or analyzed. ${skipped} tracked path(s) were skipped as non-source or filtered.`,
+        excerpt: `Deterministic structural scan of the git work tree${commit ? ` at commit ${commit}` : ''}: tracked source files (allow-listed extensions, ≤ 1 MiB) became File nodes and directories up to depth ${depth} became components (${options.files === 'all' ? 'all allow-listed files' : 'source and documentation files; repository plumbing skipped'}). File content records language, line count, byte size, and any leading comment; no code was executed or analyzed. ${skipped} tracked path(s) were skipped as non-source or filtered.`,
         actorLabel: 'repository-scanner',
       },
     ],

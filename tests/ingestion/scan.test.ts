@@ -63,17 +63,14 @@ describe('scanRepository', () => {
       'component.src',
     );
     const paths = manifest.files.map((f) => f.path);
-    expect(paths).toEqual(
-      [
-        '.gitignore',
-        'README.md',
-        'package.json',
-        'scripts/run.sh',
-        'src/catalog/index.ts',
-        'src/payments/deep/nested/util.ts',
-        'src/payments/webhook.ts',
-      ].filter((p) => p !== '.gitignore'),
-    );
+    expect(paths).toEqual([
+      'README.md',
+      'scripts/run.sh',
+      'src/catalog/index.ts',
+      'src/payments/deep/nested/util.ts',
+      'src/payments/webhook.ts',
+    ]);
+    expect(paths).not.toContain('package.json');
     expect(paths).not.toContain('package-lock.json');
     expect(paths).not.toContain('assets/logo.png');
     expect(paths).not.toContain('ignored.log');
@@ -91,9 +88,16 @@ describe('scanRepository', () => {
     expect(manifest.edges).toEqual([]);
     expect(manifest.sources[0]?.kind).toBe('repository');
     expect(manifest.sources[0]?.excerpt).toContain(`commit ${stats.commit}`);
-    expect(stats).toMatchObject({ files: 6, components: 5 });
+    expect(stats).toMatchObject({ files: 5, components: 5 });
     expect(stats.skipped).toBeGreaterThanOrEqual(3);
     expect(() => parseManifestBytes(Buffer.from(JSON.stringify(manifest)))).not.toThrow();
+  });
+
+  it('keeps repository plumbing only with files: all', async () => {
+    const all = await scanRepository(root, { files: 'all' });
+    expect(all.manifest.files.map((f) => f.path)).toContain('package.json');
+    expect(all.manifest.files.map((f) => f.path)).not.toContain('package-lock.json');
+    expect(all.manifest.sources[0]?.excerpt).toContain('all allow-listed files');
   });
 
   it('is deterministic and derives a stable project id from the repository identity', async () => {

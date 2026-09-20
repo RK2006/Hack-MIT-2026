@@ -9,7 +9,7 @@ import { ingestDocumentation } from '../src/server/ingestion/docs';
 import { scanRepository } from '../src/server/ingestion/scan';
 import { proposalModelFromEnv } from '../src/server/proposals/model';
 
-// Usage: npm run scan:repo -- <path> [--out file.json] [--import] [--docs] [--name "Project"] [--depth 2] [--max-files 600] [--include src ...]
+// Usage: npm run scan:repo -- <path> [--out file.json] [--import] [--docs] [--name "Project"] [--depth 2] [--max-files 600] [--include src ...] [--files source|all]
 // --docs (with --import) also reads README/AGENTS/CONTRIBUTING/CHANGELOG/docs/**.md into inferred proposals.
 const args = process.argv.slice(2);
 const flag = (name: string) => {
@@ -21,7 +21,7 @@ for (let i = 0; i < args.length; i += 1)
   if (args[i] === '--include' && args[i + 1]) includes.push(args[i + 1]!);
 const consumed = new Set<number>();
 for (let i = 0; i < args.length; i += 1) {
-  if (['--out', '--name', '--depth', '--max-files', '--include'].includes(args[i]!)) {
+  if (['--out', '--name', '--depth', '--max-files', '--include', '--files'].includes(args[i]!)) {
     consumed.add(i);
     consumed.add(i + 1);
   } else if (args[i] === '--import' || args[i] === '--docs') consumed.add(i);
@@ -29,7 +29,7 @@ for (let i = 0; i < args.length; i += 1) {
 const path = args.find((_, i) => !consumed.has(i));
 if (!path) {
   console.error(
-    'Usage: npm run scan:repo -- <path> [--out file.json] [--import] [--docs] [--name "Project"] [--depth 2] [--max-files 600] [--include prefix ...]',
+    'Usage: npm run scan:repo -- <path> [--out file.json] [--import] [--docs] [--name "Project"] [--depth 2] [--max-files 600] [--include prefix ...] [--files source|all]',
   );
   process.exit(2);
 }
@@ -41,6 +41,7 @@ try {
     depth: depth === undefined ? undefined : Number(depth),
     maxFiles: maxFiles === undefined ? undefined : Number(maxFiles),
     include: includes,
+    files: flag('--files') === 'all' ? 'all' : 'source',
   });
   const bytes = Buffer.from(JSON.stringify(manifest, null, 2) + '\n');
   const out = flag('--out');

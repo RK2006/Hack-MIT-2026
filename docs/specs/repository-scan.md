@@ -49,7 +49,7 @@ kind — the scanner emits only `component` and `file` nodes.
 ## 6. Functional requirements
 
 - [x] S1: `scanRepository(rootPath, options)` lists files with `git ls-files -z` (tracked, non-ignored) via `execFile`; a path that is not a git work tree is `SOURCE_UNAVAILABLE`.
-- [x] S2: Files are kept when their extension is in the source allowlist (code, config, docs) and they are ≤ 1 MiB; lockfiles, images, archives, fonts, and minified bundles are skipped. `--include <prefix>` (repeatable) restricts to path prefixes.
+- [x] S2: Files are kept when their extension is in the source allowlist and they are ≤ 1 MiB; lockfiles, images, archives, fonts, and minified bundles are always skipped. By default (`--files source`) repository plumbing is skipped too: anything under a dot-directory (`.github`, `.claude`, `.agents`, `.vscode`), root/top-level config data files (`tsconfig*.json`, `package.json`, `*.config.*`, `docker-compose.yml`, CI matrices) and dotfiles — so a template repo yields its code, Dockerfile, and docs rather than issue templates and lint configs. `--files all` keeps every allow-listed file. `--include <prefix>` (repeatable) restricts to path prefixes.
 - [x] S3: Components are the repository root plus every directory up to `--depth` (default 2) that contains kept files (directly or below); a file belongs to the deepest component that is a prefix of its path. Components chain by `parentKey`.
 - [x] S4: Node content is deterministic metadata: files → language, line count, byte size, and the first comment line if the file starts with one (≤ 200 chars); components → path, file count, direct subdirectories. Titles are basenames; summaries are paths.
 - [x] S5: Keys are `component.<slug-of-path>` / `file.<slug-of-path>` (root is `component.root`), unique and stable; the project id is derived deterministically (UUID v5-style from the origin remote URL or the realpath), so re-importing the same repo is an explicit conflict.
@@ -205,3 +205,10 @@ Documentation ingestion, live on 2026-09-20 with `gemini:gemini-3.8-flash`:
   (`scan:repo --import --docs`): 14 structural nodes + 6 proposals from its readme.
 - Selection order and blob-URL construction are unit tested; per-document
   failure isolation and the skip rules are integration tested with a fixed model.
+
+Default file selection was tightened after the first real scans: the cloner
+template produced 29 File nodes of which only 5 were code, the rest issue
+templates, funding/CI YAML, and lint/TS configs. `files: 'source'` (default)
+skips dot-directories and config manifests, bringing that repo to 12 files
+(code + Dockerfile + docs) and 5 components; `files: 'all'` restores the old
+behavior for repositories where configuration is the point.

@@ -166,6 +166,12 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
           .max(20)
           .optional()
           .describe('Path prefixes to keep'),
+        files: z
+          .enum(['source', 'all'])
+          .optional()
+          .describe(
+            'source (default): code and docs only, repo plumbing skipped; all: every allow-listed file',
+          ),
         includeDocs: z
           .boolean()
           .optional()
@@ -174,9 +180,15 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
           ),
       }),
     },
-    async ({ path, name, depth, maxFiles, include, includeDocs }) =>
+    async ({ path, name, depth, maxFiles, include, files, includeDocs }) =>
       run('scan_repository', async () => {
-        const { manifest, stats } = await scanRepository(path, { name, depth, maxFiles, include });
+        const { manifest, stats } = await scanRepository(path, {
+          name,
+          depth,
+          maxFiles,
+          include,
+          files,
+        });
         const imported = await importPreparedProject(
           Buffer.from(JSON.stringify(manifest)),
           deps.store,

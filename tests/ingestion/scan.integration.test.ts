@@ -20,6 +20,7 @@ describe('scanning this repository into PostgreSQL (A3)', () => {
   it('imports the scan and conflicts on repeat', async () => {
     const { manifest, stats } = await scanRepository(new URL('../..', import.meta.url).pathname, {
       include: ['src', 'docs'],
+      files: 'all',
     });
     const bytes = Buffer.from(JSON.stringify(manifest));
     const result = await importPreparedProject(bytes, store);
