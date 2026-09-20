@@ -6,6 +6,7 @@ import {
   EXCERPT_PREVIEW_LINES,
   excerptLineCount,
   parseExcerpt,
+  parseInline,
   previewExcerpt,
   stripModelPrefix,
   type ExcerptBlock,
@@ -19,25 +20,60 @@ const KIND_LABEL: Record<Source['kind'], string> = {
   agent: 'Input the agent analyzed',
 };
 
+/** Inline Markdown as React text nodes only: bold and code, never HTML or links. */
+function Inline({ text }: { text: string }) {
+  return (
+    <>
+      {parseInline(text).map((span, index) =>
+        span.kind === 'strong' ? (
+          <strong key={index}>{span.text}</strong>
+        ) : span.kind === 'code' ? (
+          <code key={index}>{span.text}</code>
+        ) : (
+          span.text
+        ),
+      )}
+    </>
+  );
+}
+
 function ExcerptBlocks({ blocks }: { blocks: ExcerptBlock[] }) {
   return (
     <>
       {blocks.map((block, index) => {
         switch (block.kind) {
           case 'heading':
-            return <h5 key={index}>{block.text}</h5>;
-          case 'list':
-            return (
-              <ul key={index}>
-                {block.items.map((item, i) => (
-                  <li key={i}>{item}</li>
-                ))}
-              </ul>
+            return block.level <= 2 ? (
+              <h4 key={index}>
+                <Inline text={block.text} />
+              </h4>
+            ) : (
+              <h5 key={index}>
+                <Inline text={block.text} />
+              </h5>
             );
+          case 'quote':
+            return (
+              <blockquote key={index}>
+                <Inline text={block.text} />
+              </blockquote>
+            );
+          case 'list': {
+            const items = block.items.map((item, i) => (
+              <li key={i}>
+                <Inline text={item} />
+              </li>
+            ));
+            return block.ordered ? <ol key={index}>{items}</ol> : <ul key={index}>{items}</ul>;
+          }
           case 'code':
             return <pre key={index}>{block.text}</pre>;
           default:
-            return <p key={index}>{block.text}</p>;
+            return (
+              <p key={index}>
+                <Inline text={block.text} />
+              </p>
+            );
         }
       })}
     </>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   excerptLineCount,
   parseExcerpt,
+  parseInline,
   previewExcerpt,
   stripModelPrefix,
 } from '../../src/lib/excerpt';
@@ -50,6 +51,7 @@ describe('parseExcerpt', () => {
           'Run the job once per day, independently of the webhook request path.',
           'Delete only terminal receipt rows older than 90 days.',
         ],
+        ordered: false,
       },
     ]);
   });
@@ -65,7 +67,7 @@ describe('parseExcerpt', () => {
       'heading',
       'code',
     ]);
-    expect(blocks[1]).toEqual({ kind: 'heading', text: 'Description' });
+    expect(blocks[1]).toEqual({ kind: 'heading', text: 'Description', level: 6 });
     const code = blocks.at(-1);
     expect(code?.kind).toBe('code');
     // Blank lines inside the diff are preserved; surrounding ones are trimmed.
@@ -88,6 +90,68 @@ describe('parseExcerpt', () => {
     expect(parseExcerpt('first line\nsecond line')).toEqual([
       { kind: 'paragraph', text: 'first line second line' },
     ]);
+  });
+});
+
+describe('markdown constructs in agent inputs', () => {
+  const markdown = [
+    '# Synthetic Engineering Context',
+    '',
+    '> This entire document is fabricated test data.',
+    '> Treat every claim as a proposal.',
+    '',
+    '## Conversation outcome',
+    '',
+    'The team is building **Atlas Checkout**, using `bookingRef` as the key.',
+    '',
+    '1. First decision',
+    '2) Second decision',
+    '',
+    '```ts',
+    'const x = 1;',
+    '',
+    '- not a bullet inside code',
+    '```',
+    'Trailing paragraph.',
+  ].join('\n');
+
+  it('recognises headings with levels, block quotes, ordered lists, and fenced code', () => {
+    const blocks = parseExcerpt(markdown);
+    expect(blocks).toEqual([
+      { kind: 'heading', text: 'Synthetic Engineering Context', level: 1 },
+      {
+        kind: 'quote',
+        text: 'This entire document is fabricated test data. Treat every claim as a proposal.',
+      },
+      { kind: 'heading', text: 'Conversation outcome', level: 2 },
+      {
+        kind: 'paragraph',
+        text: 'The team is building **Atlas Checkout**, using `bookingRef` as the key.',
+      },
+      { kind: 'list', items: ['First decision', 'Second decision'], ordered: true },
+      { kind: 'code', text: 'const x = 1;\n\n- not a bullet inside code' },
+      { kind: 'paragraph', text: 'Trailing paragraph.' },
+    ]);
+  });
+
+  it('keeps Label: headings at the lowest level and bullets unordered', () => {
+    const blocks = parseExcerpt('Changed files:\n- a.ts\n- b.ts');
+    expect(blocks).toEqual([
+      { kind: 'heading', text: 'Changed files', level: 6 },
+      { kind: 'list', items: ['a.ts', 'b.ts'], ordered: false },
+    ]);
+  });
+
+  it('splits inline bold and code spans and leaves other syntax literal', () => {
+    expect(parseInline('build **Atlas** with `bookingRef` and _emphasis_')).toEqual([
+      { kind: 'text', text: 'build ' },
+      { kind: 'strong', text: 'Atlas' },
+      { kind: 'text', text: ' with ' },
+      { kind: 'code', text: 'bookingRef' },
+      { kind: 'text', text: ' and _emphasis_' },
+    ]);
+    expect(parseInline('plain')).toEqual([{ kind: 'text', text: 'plain' }]);
+    expect(parseInline('<b>not html</b>')).toEqual([{ kind: 'text', text: '<b>not html</b>' }]);
   });
 });
 

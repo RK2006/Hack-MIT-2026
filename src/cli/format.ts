@@ -72,9 +72,13 @@ export function formatExcerpt(blocks: ExcerptBlock[], indent = '    '): string {
     .map((block) => {
       switch (block.kind) {
         case 'heading':
-          return `${indent}${block.text}:`;
+          return `${indent}${block.level <= 2 ? block.text.toUpperCase() : block.text}:`;
+        case 'quote':
+          return `${indent}> ${block.text}`;
         case 'list':
-          return block.items.map((item) => `${indent}- ${item}`).join('\n');
+          return block.items
+            .map((item, i) => `${indent}${block.ordered ? `${i + 1}.` : '-'} ${item}`)
+            .join('\n');
         case 'code':
           return block.text
             .split('\n')
