@@ -136,10 +136,15 @@ function validateReferences(manifest: PreparedProjectManifest): void {
         path: `sources.${source.key}`,
       });
     sourceKeys.add(source.key);
-    if (!source.excerpt.includes('synthetic prepared example')) {
+    // Synthetic projects must say so in every evidence excerpt; scanned or curated real
+    // repositories (name without "synthetic") are exempt.
+    if (
+      /synthetic/i.test(manifest.project.name) &&
+      !source.excerpt.includes('synthetic prepared example')
+    ) {
       throw graphError(
         'VALIDATION_ERROR',
-        'Every source must label the synthetic prepared example',
+        'Every source of a synthetic project must label the synthetic prepared example',
         { path: `sources.${source.key}.excerpt` },
       );
     }
