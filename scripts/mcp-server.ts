@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import { config as loadEnv } from 'dotenv';
 import { StdioServerTransport } from '@modelcontextprotocol/server/stdio';
 import { createEmbeddingCache } from '../src/server/context/compiler/cache';
 import { embeddingProviderFromEnv } from '../src/server/context/compiler/embedding';
@@ -7,6 +7,9 @@ import { migrate } from '../src/server/db/migrate';
 import { createPool } from '../src/server/db/pool';
 import { createContextGraphMcpServer } from '../src/server/mcp/server';
 import { proposalModelFromEnv } from '../src/server/proposals/model';
+
+// MCP clients spawn this script from an arbitrary cwd, so read .env from the repo root, not process.cwd().
+loadEnv({ path: new URL('../.env', import.meta.url), quiet: true });
 
 // stdout is the MCP protocol channel; every diagnostic goes to stderr.
 const log = (message: unknown) => console.error(message);
