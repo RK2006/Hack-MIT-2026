@@ -475,7 +475,8 @@ Learned while implementing the pipeline against the layout stand-in (2026-09-20)
 
 To be filled after the repository exists and rehearsal:
 
-- Tripline repository URL and the commit hash used for the demo.
+- Tripline repository: https://github.com/AnmolKaran/hackmit-demo-2026 (name differs from the working title). Commit hash used for the demo: TBD.
+- The repository copies `demo-tripline.md` at its root; it will be scanned as a documentation file and should be removed (or excluded) before the demo so the demo project does not describe its own demo.
 - Final primary/backup demo task sentences and the measured token numbers.
 - Recorded A5 outcomes (with/without context, per agent).
 - Any compiler or workbench findings filed against their specs.

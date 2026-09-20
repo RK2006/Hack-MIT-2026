@@ -47,7 +47,7 @@ describe('tripline claims overlay', () => {
   it('every overlay source is a manual GitHub URL under the tripline repository', () => {
     for (const source of overlay.sources) {
       expect(source.kind).toBe('manual');
-      expect(source.uri).toMatch(/^https:\/\/github\.com\/AnmolKaran\/tripline\//);
+      expect(source.uri).toMatch(/^https:\/\/github\.com\/AnmolKaran\/hackmit-demo-2026\//);
     }
     for (const claim of overlay.claims)
       expect(overlay.sources.some((s) => s.key === claim.sourceKey)).toBe(true);

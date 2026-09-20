@@ -4,15 +4,15 @@
     {
       "key": "source.adr-001",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-001-store-utc-render-in-stop-zone.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-001-utc-storage-stop-zone-display.md",
       "label": "ADR-001: store UTC, render and schedule in the stop's zone",
-      "excerpt": "Decision: every instant is persisted as a UTC ISO-8601 string. Anything a traveller sees or is notified about is computed in the IANA zone of the itinerary stop it belongs to (stop.timezone), never the traveller's home zone. src/itinerary/timezone.ts owns the conversion (toZoned, localWallClock). Consequence: reminders, day headers, and check-in times all derive from the stop's zone.",
+      "excerpt": "Decision: 1. Every instant persisted by the service is a UTC ISO-8601 string of the form YYYY-MM-DDTHH:mm:ss.sssZ. 2. Each itinerary stop carries the IANA zone of the place (stop.timezone), validated on write. 3. Anything user-facing that is about a stop — displayed times, \"morning of\" computations, reminders scheduled relative to the stop — is computed in stop.timezone. The traveller's homeTimezone is for account-level display only and must not be used to derive stop-relative instants. 4. All zone math goes through src/itinerary/timezone.ts (toZoned, fromZoned, atLocalTime, formatInZone). Consequences: Reviewers should treat a homeTimezone reference outside trips/ as a smell and ask for the stop's zone instead.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.adr-002",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-002-minor-units-and-locked-fx.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-002-minor-units-and-locked-fx.md",
       "label": "ADR-002: money in minor units; FX locked at quote time",
       "excerpt": "Decision: money is { amountMinor: integer, currency: ISO-4217 }. A quote captures fxRate and quotedAt once; bookings and displays reuse the quoted amount and never re-apply a rate. src/pricing/money.ts and src/pricing/quote.ts implement this.",
       "actorLabel": "tripline-curator"
@@ -20,7 +20,7 @@
     {
       "key": "source.adr-003",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-003-client-booking-ref-idempotency.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-003-client-booking-ref-idempotency.md",
       "label": "ADR-003: client-generated bookingRef is the provider idempotency key",
       "excerpt": "Decision: the client generates bookingRef before the first provider call. Every attempt, including retries in src/providers/retry.ts (max 3, jittered backoff), forwards the same bookingRef as the provider's idempotency key; adapters must treat a repeated ref as the same reservation. Never mint a new request id per attempt.",
       "actorLabel": "tripline-curator"
@@ -28,7 +28,7 @@
     {
       "key": "source.adr-004",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-004-provider-search-cache.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-004-provider-search-cache.md",
       "label": "ADR-004: provider search results cached 10 minutes, keyed by currency too",
       "excerpt": "Decision: search responses are cached for 10 minutes in src/providers/cache.ts under (origin, destination, date, currency). Currency is part of the key because provider quotes are currency-specific and must not be reconverted.",
       "actorLabel": "tripline-curator"
@@ -36,7 +36,7 @@
     {
       "key": "source.adr-005",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/docs/adr/ADR-005-soft-delete-stops.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-005-soft-delete-stops.md",
       "label": "ADR-005: itinerary stops are soft-deleted",
       "excerpt": "Decision: deleting a stop sets deletedAt instead of removing the row so bookings keep their history. Consequence: anything scheduled against a stop (reminders in src/notifications) must treat a stop with deletedAt as cancelled and must not fire.",
       "actorLabel": "tripline-curator"
@@ -44,15 +44,23 @@
     {
       "key": "source.contributing",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/blob/main/CONTRIBUTING.md",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/CONTRIBUTING.md",
       "label": "CONTRIBUTING.md reviewer checklist",
       "excerpt": "Reviewer checklist: instants stored UTC and rendered in the stop's zone; money in minor units with the quoted FX; bookingRef forwarded on every provider attempt; search cache key includes currency; soft-deleted stops cancel their reminders. Trips have exactly one traveller; providers are in-process fakes with injected latency and timeouts so tests are deterministic.",
       "actorLabel": "tripline-curator"
     },
     {
+      "key": "source.pr-itinerary",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pull/2",
+      "label": "PR #2: itinerary stops with IANA zones (ADR-001)",
+      "excerpt": "Follow-ups: Reminders/notifications will consume atLocalTime for \"morning of the stop\" nudges. Whoever picks that up: use the stop's zone, per the ADR. Soft deletion of stops is not in scope here; stops are append-only for now. — Seed adds a Tokyo and a Lisbon stop to the New York traveller's trip so the demo data spans three zones.",
+      "actorLabel": "tripline-curator"
+    },
+    {
       "key": "source.pr-reminders",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/pulls?q=is%3Apr+trip+reminders",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pulls?q=is%3Apr+trip+reminders",
       "label": "Pull request: trip reminders",
       "excerpt": "Adds src/notifications/reminders.ts and scheduler.ts. Reminder instants are computed from the traveller's home zone for now; tests/reminders.test.ts has a skipped case for a stop in another zone with a TODO to switch to the stop's zone.",
       "actorLabel": "tripline-curator"
@@ -60,7 +68,7 @@
     {
       "key": "source.pr-hotel-retry",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/tripline/pulls?q=is%3Apr+provider+adapters",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pulls?q=is%3Apr+provider+adapters",
       "label": "Pull request: provider adapters, retry, cache",
       "excerpt": "Adds flights/hotels adapters with retry and cache. Known gap: the hotel adapter builds a fresh provider request id on each retry attempt instead of forwarding bookingRef; a skipped test in tests/hotels.test.ts documents the duplicate reservation after a timeout.",
       "actorLabel": "tripline-curator"
@@ -71,8 +79,8 @@
       "key": "constraint.utc-storage-stop-zone-display",
       "type": "constraint",
       "title": "Instants are stored as UTC; user-facing times use the stop's IANA zone",
-      "content": "All instants are persisted as UTC ISO-8601 strings. Any time shown to a traveller or used to schedule something on their behalf must be computed in the time zone of the itinerary stop it belongs to (stop.timezone, an IANA zone such as Asia/Tokyo), never in the traveller's home zone (trip.homeTimezone). Use toZoned(instant, stop.timezone) and localWallClock from src/itinerary/timezone.ts; do not call Date-zone helpers directly in other modules. 'Remind me at 9am on the day of the stop' means 9am in the stop's zone.",
-      "summary": "Store UTC; render and schedule in stop.timezone via src/itinerary/timezone.ts, never trip.homeTimezone.",
+      "content": "All instants are persisted as UTC ISO-8601 strings. Any time shown to a traveller or used to schedule something on their behalf must be computed in the time zone of the itinerary stop it belongs to (stop.timezone, an IANA zone such as Asia/Tokyo), never in the traveller's home zone (trip.homeTimezone), which is for account-level display only. All zone math goes through src/itinerary/timezone.ts: atLocalTime(instant, stop.timezone, hour, minute) gives '08:00 on the stop's local day' as a UTC instant; toZoned/fromZoned convert; formatInZone displays. No other module may call Intl.DateTimeFormat with a timeZone or do offset arithmetic. A homeTimezone reference outside src/trips/ is a review smell.",
+      "summary": "Store UTC; render and schedule in stop.timezone via atLocalTime/toZoned in src/itinerary/timezone.ts, never trip.homeTimezone.",
       "importance": 5,
       "confidence": 1,
       "sourceKey": "source.adr-001",
@@ -82,7 +90,7 @@
       "key": "decision.adr-001-store-utc-render-stop-zone",
       "type": "decision",
       "title": "ADR-001: store UTC, render and schedule in the stop's zone",
-      "content": "Context: travellers cross zones within one trip and their home zone is meaningless for a stop elsewhere. Decision: persist UTC; derive wall-clock times from each stop's own IANA zone; centralise conversion in src/itinerary/timezone.ts. Consequences: day headers, check-in times, and reminders all take stop.timezone as input; a stop must carry its zone explicitly (see discovery on deriving zones).",
+      "content": "Context: a trip spans several places with their own clocks; trip.homeTimezone arrived first with the trips scaffold and is the tempting, wrong default for anything about a stop. Decision: persist UTC ISO strings (offset input normalised, offset-less input rejected as ambiguous); each stop carries a validated IANA zone; everything about a stop is computed in stop.timezone; all zone math lives in src/itinerary/timezone.ts. Consequences: instants sort lexicographically; DST is handled in one place (spring-forward gaps shift forward, fall-back overlaps take the earlier offset); any feature computing a time 'for the traveller' must ask which place it is about — in particular the reminders module in src/notifications/.",
       "summary": "Why every displayed or scheduled time takes the stop's zone as input.",
       "importance": 4,
       "confidence": 1,
@@ -93,8 +101,8 @@
       "key": "bug.reminders-home-zone",
       "type": "bug",
       "title": "Trip reminders are scheduled in the traveller's home zone instead of the stop's zone",
-      "content": "src/notifications/reminders.ts computes the reminder instant with trip.homeTimezone. For a stop whose zone differs from the traveller's home zone the reminder fires at the wrong local time (e.g. a 9am Tokyo reminder for a New York traveller fires at 9am New York time). The fix is to derive the instant from stop.timezone via toZoned/localWallClock in src/itinerary/timezone.ts. tests/reminders.test.ts contains the skipped reproduction.",
-      "summary": "reminders.ts uses trip.homeTimezone; should use stop.timezone through src/itinerary/timezone.ts.",
+      "content": "src/notifications/reminders.ts computes the reminder instant with trip.homeTimezone. For a stop whose zone differs from the traveller's home zone the reminder fires at the wrong local time (the seed data has a New York traveller with Tokyo and Lisbon stops: a 'morning of' Tokyo reminder fires at New York morning). The fix is to derive the instant from stop.timezone with atLocalTime(stop.startsAt, stop.timezone, hour) from src/itinerary/timezone.ts, per ADR-001. tests/reminders.test.ts contains the skipped reproduction.",
+      "summary": "reminders.ts uses trip.homeTimezone; should use atLocalTime(…, stop.timezone, …) from src/itinerary/timezone.ts.",
       "importance": 5,
       "confidence": 1,
       "sourceKey": "source.pr-reminders",
@@ -224,13 +232,13 @@
     {
       "key": "discovery.zone-cannot-be-derived-from-city",
       "type": "discovery",
-      "title": "A stop's zone cannot be derived from its destination string; it is stored explicitly",
-      "content": "City names are ambiguous and some destinations span zones, so the itinerary stores stop.timezone (IANA) explicitly when a stop is created. Consumers must read the stored zone rather than infer one from the destination or from the traveller.",
-      "summary": "Read stop.timezone; never infer a zone.",
+      "title": "Each stop stores its own validated IANA zone; the traveller's zone is account-level only",
+      "content": "stop.timezone is written and validated (isValidTimeZone/assertTimeZone) when the stop is created, and stop responses include a display block already rendered in that zone so clients never convert. Consumers must read the stored zone rather than infer one from the destination or from trip.homeTimezone, which exists only for the account-level 'your trips' view.",
+      "summary": "Read stop.timezone; never infer a zone from the destination or the traveller.",
       "importance": 3,
       "confidence": 0.95,
-      "sourceKey": "source.adr-001",
-      "changeReason": "Curated from ADR-001 for the Tripline demo project"
+      "sourceKey": "source.pr-itinerary",
+      "changeReason": "Curated from PR #2 for the Tripline demo project"
     },
     {
       "key": "discovery.scheduler-compares-utc-instants",
