@@ -1,9 +1,76 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import {
+  EXCERPT_PREVIEW_LINES,
+  excerptLineCount,
+  parseExcerpt,
+  previewExcerpt,
+  stripModelPrefix,
+  type ExcerptBlock,
+} from '@/lib/excerpt';
 import { isSafeLink } from '@/lib/layout';
 import type { Source } from '@/server/context/types';
+
+const KIND_LABEL: Record<Source['kind'], string> = {
+  manual: 'Operator note',
+  repository: 'Repository evidence',
+  agent: 'Input the agent analyzed',
+};
+
+function ExcerptBlocks({ blocks }: { blocks: ExcerptBlock[] }) {
+  return (
+    <>
+      {blocks.map((block, index) => {
+        switch (block.kind) {
+          case 'heading':
+            return <h5 key={index}>{block.text}</h5>;
+          case 'list':
+            return (
+              <ul key={index}>
+                {block.items.map((item, i) => (
+                  <li key={i}>{item}</li>
+                ))}
+              </ul>
+            );
+          case 'code':
+            return <pre key={index}>{block.text}</pre>;
+          default:
+            return <p key={index}>{block.text}</p>;
+        }
+      })}
+    </>
+  );
+}
+
+/** Structured, collapsible rendering of a stored excerpt; the stored text is never altered. */
+export function Excerpt({ source }: { source: Source }) {
+  const [expanded, setExpanded] = useState(false);
+  const blocks = useMemo(
+    () => parseExcerpt(source.kind === 'agent' ? stripModelPrefix(source.excerpt) : source.excerpt),
+    [source],
+  );
+  const total = excerptLineCount(blocks);
+  const collapsible = total > EXCERPT_PREVIEW_LINES;
+  const shown = collapsible && !expanded ? previewExcerpt(blocks) : blocks;
+  const single = blocks.length === 1 && blocks[0]?.kind === 'paragraph';
+  return (
+    <div className={`excerpt${single ? ' excerpt-single' : ''}`}>
+      <ExcerptBlocks blocks={shown} />
+      {collapsible ? (
+        <button
+          type="button"
+          className="link excerpt-toggle"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((value) => !value)}
+        >
+          {expanded ? 'Show less' : `Show full excerpt (${total} lines)`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 /** Renders a source locator as a link only for https:; other schemes stay plain text. */
 export function Locator({ uri }: { uri: string }) {
@@ -21,7 +88,7 @@ export function SourceCard({ source }: { source: Source }) {
     <article className="source-card">
       <header className="source-card-header">
         <div>
-          <span className="section-kicker">{source.kind} source</span>
+          <span className="section-kicker">{KIND_LABEL[source.kind]}</span>
           <h4>{source.label}</h4>
         </div>
         <span className="source-recorded">{new Date(source.createdAt).toLocaleDateString()}</span>
@@ -30,7 +97,7 @@ export function SourceCard({ source }: { source: Source }) {
         <Locator uri={source.uri} />
         {source.revisionRef ? <span className="badge mono">ref {source.revisionRef}</span> : null}
       </div>
-      <blockquote className="excerpt">{source.excerpt}</blockquote>
+      <Excerpt source={source} />
     </article>
   );
 }

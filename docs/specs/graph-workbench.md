@@ -100,6 +100,14 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       node list/details fallback so the graph is not the sole means of navigation.
 - [x] W2: Display source locator, pinned reference, excerpt, actor/reason, revision,
       and canonical/inferred labels; inferred edges remain visibly distinguishable.
+- [x] W2a: Render long excerpts (agent inputs, PR digests) readably without changing
+      stored data: preserve line structure by rendering `- ` lines as a list, blank
+      lines as paragraph breaks, `Label:` lines as small headings, and everything after
+      a `Diff excerpt:` heading in monospace; hide a leading `[model-id]` prefix on
+      agent sources because the card label already names the model; show at most eight
+      lines by default with a "Show full excerpt" toggle; use upright body type, not
+      italic, for multi-line excerpts. The parser is a pure function in
+      `src/lib/excerpt.ts` covered by `tests/workbench/excerpt.test.ts`.
 - [x] W3: Support manual node creation, editing, review, archive/unarchive, with
       foundation validation, fresh manual evidence, and expected-version conflicts.
 - [x] W4: Display archived nodes in a separate list/detail/history path so they
