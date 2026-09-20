@@ -221,7 +221,9 @@ type ReviseNodeRequest = OperatorEvidence & {
 
 The server creates the manual source `{ kind: 'manual', uri: 'manual://workbench/<uuid>',
 label: 'Workbench operator note', excerpt: evidenceNote, revisionRef: null }` in
-the same transaction and assigns `actor: { kind: 'human', label: 'local-operator' }`.
+the same transaction and assigns `actor: { kind: 'human', label: OPERATOR_LABEL ?? 'local-operator' }`.
+`OPERATOR_LABEL` (≤ 120 chars) lets teammates who share one database appear as
+themselves in provenance; it is attribution only, not authentication.
 Payloads cannot choose the actor or source kind. `direction: 'outgoing'` stores
 `new → other`; `'incoming'` stores `other → new`.
 

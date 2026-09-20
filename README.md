@@ -27,6 +27,14 @@ All configuration lives in a git-ignored `.env` at the repo root (copy
 Shell variables take precedence over `.env`, so `unset` a stale key exported in
 your shell profile if it is not the one you want. Never commit real credentials.
 
+### Sharing one graph across a team
+
+Point every teammate's `.env` at the same hosted PostgreSQL (e.g. a Neon connection string with
+`sslmode=require`) and set `OPERATOR_LABEL=<your name>` so reviews and edits are attributed to the
+person who made them. The store's per-project locking and expected-version conflicts already make
+concurrent edits safe; there is no authentication — anyone with the connection string has full
+access, so share it privately.
+
 Embeddings default to a local sentence-transformer (`EMBEDDING_PROVIDER=local`,
 `Xenova/all-MiniLM-L6-v2` via ONNX, no network after the first model download).
 To use OpenAI instead, set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY`
