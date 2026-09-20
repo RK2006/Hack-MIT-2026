@@ -138,7 +138,13 @@ export default function TaskPanel(props: TaskPanelProps) {
 
   return (
     <section className="task-panel" aria-label="Task context">
-      <h2>Task context</h2>
+      <header className="task-heading">
+        <div>
+          <span className="section-kicker">Agent handoff</span>
+          <h2>Task context</h2>
+        </div>
+        <p>Compile only the project knowledge this task needs.</p>
+      </header>
       <form
         className="task-form"
         onSubmit={(event) => {
@@ -196,7 +202,11 @@ export default function TaskPanel(props: TaskPanelProps) {
             />
             Allow degraded (lexical) fallback
           </label>
-          <button type="submit" disabled={result.kind === 'running' || task.trim().length === 0}>
+          <button
+            type="submit"
+            className="button-primary"
+            disabled={result.kind === 'running' || task.trim().length === 0}
+          >
             {result.kind === 'running' ? 'Compiling…' : 'Compile context'}
           </button>
         </div>
@@ -319,7 +329,11 @@ export default function TaskPanel(props: TaskPanelProps) {
 
           <div className="context-text-head">
             <h3>Context text (exact, {bundle.tokenCount} tokens)</h3>
-            <button type="button" onClick={() => void copy(bundle.contextText)}>
+            <button
+              type="button"
+              className="button-secondary"
+              onClick={() => void copy(bundle.contextText)}
+            >
               Copy
             </button>
             {copied === 'ok' ? <span className="muted">Copied</span> : null}

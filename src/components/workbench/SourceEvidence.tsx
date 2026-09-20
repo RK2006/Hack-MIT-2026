@@ -18,24 +18,20 @@ export function Locator({ uri }: { uri: string }) {
 
 export function SourceCard({ source }: { source: Source }) {
   return (
-    <dl className="source">
-      <dt>Kind</dt>
-      <dd>{source.kind}</dd>
-      <dt>Label</dt>
-      <dd>{source.label}</dd>
-      <dt>Locator</dt>
-      <dd>
+    <article className="source-card">
+      <header className="source-card-header">
+        <div>
+          <span className="section-kicker">{source.kind} source</span>
+          <h4>{source.label}</h4>
+        </div>
+        <span className="source-recorded">{new Date(source.createdAt).toLocaleDateString()}</span>
+      </header>
+      <div className="source-locator">
         <Locator uri={source.uri} />
-      </dd>
-      <dt>Pinned ref</dt>
-      <dd className="mono">{source.revisionRef ?? '—'}</dd>
-      <dt>Recorded</dt>
-      <dd>{new Date(source.createdAt).toLocaleString()}</dd>
-      <dt>Excerpt</dt>
-      <dd>
-        <pre className="excerpt">{source.excerpt}</pre>
-      </dd>
-    </dl>
+        {source.revisionRef ? <span className="badge mono">ref {source.revisionRef}</span> : null}
+      </div>
+      <blockquote className="excerpt">{source.excerpt}</blockquote>
+    </article>
   );
 }
 
@@ -66,8 +62,11 @@ export default function SourceEvidence({
   if (source) return <SourceCard source={source} />;
   return (
     <div className="source-loader">
-      <span className="mono muted">{sourceId}</span>{' '}
-      <button type="button" onClick={load} disabled={loading}>
+      <div>
+        <strong>Evidence is available</strong>
+        <span className="source-loader-id mono">{sourceId}</span>
+      </div>
+      <button type="button" className="button-secondary" onClick={load} disabled={loading}>
         {loading ? 'Loading…' : error ? 'Retry' : 'Load source'}
       </button>
       {error ? <p className="error">{error}</p> : null}

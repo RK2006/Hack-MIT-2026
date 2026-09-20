@@ -127,7 +127,9 @@ export default function Workbench({ projectId }: { projectId: string }) {
       <header className="topbar">
         <Link href="/">← Projects</Link>
         <h1>{graph?.project.name ?? 'Loading project…'}</h1>
-        <span className="muted mono">{projectId}</span>
+        <span className="topbar-project-id mono" title={projectId}>
+          {projectId}
+        </span>
         <nav className="tabs" aria-label="View">
           {(['graph', 'list', 'archived'] as View[]).map((option) => (
             <button
@@ -143,6 +145,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
         </nav>
         <button
           type="button"
+          className="button-primary"
           onClick={() =>
             setPanel({ kind: 'form', mode: { kind: 'create', selectedNode: selectedNode } })
           }
@@ -150,7 +153,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
           New node
         </button>
         {highlightedNodeIds.size > 0 ? (
-          <button type="button" onClick={() => onHighlight([])}>
+          <button type="button" className="button-secondary" onClick={() => onHighlight([])}>
             Clear highlight ({highlightedNodeIds.size})
           </button>
         ) : null}

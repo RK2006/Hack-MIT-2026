@@ -210,13 +210,20 @@ export default function NodeForm({ projectId, mode, onSaved, onCancel }: Props) 
   const isToggle = mode.kind === 'archive' || mode.kind === 'restore';
 
   return (
-    <form className="node-form" onSubmit={submit} aria-label={TITLES[mode.kind]}>
-      <h2>{TITLES[mode.kind]}</h2>
-      {mode.kind !== 'create' ? (
-        <p className="muted">
-          {mode.node.current.title} · editing from version {expectedVersion}
-        </p>
-      ) : null}
+    <form className="node-form panel-stack" onSubmit={submit} aria-label={TITLES[mode.kind]}>
+      <header className="panel-heading">
+        <div>
+          <span className="section-kicker">Context editor</span>
+          <h2>{TITLES[mode.kind]}</h2>
+          {mode.kind !== 'create' ? (
+            <p className="panel-intro">
+              {mode.node.current.title} · editing from version {expectedVersion}
+            </p>
+          ) : (
+            <p className="panel-intro">Add durable, sourced knowledge to this project.</p>
+          )}
+        </div>
+      </header>
 
       {mode.kind === 'create' ? (
         <label>
@@ -416,10 +423,10 @@ export default function NodeForm({ projectId, mode, onSaved, onCancel }: Props) 
       {notice ? <p className="notice">{notice}</p> : null}
 
       <div className="actions">
-        <button type="submit" disabled={busy}>
+        <button type="submit" className="button-primary" disabled={busy}>
           {busy ? 'Saving…' : 'Save'}
         </button>
-        <button type="button" onClick={onCancel} disabled={busy}>
+        <button type="button" className="button-secondary" onClick={onCancel} disabled={busy}>
           Cancel
         </button>
       </div>

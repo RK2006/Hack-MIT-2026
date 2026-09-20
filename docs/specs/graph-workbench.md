@@ -49,6 +49,9 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
    version, actor/reason, external key/path, content, summary; relationships as
    directed sentences ("this node → REQUIRES → Idempotency (canonical)"); the
    source evidence (kind, label, locator, pinned ref, excerpt) loaded on demand.
+   The detail panel prioritizes title/summary/status, human-readable content,
+   relationships, and evidence; raw IDs, paths, and other implementation metadata
+   live in an expandable Technical details section.
 4. "Edit" opens a form pre-filled with the current snapshot plus a change reason
    and evidence note. "Review as canonical" pre-sets authority to canonical.
    "Archive"/"Restore" toggle the archived flag with a reason. "New node" opens a
@@ -93,6 +96,11 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       provide background drag-to-pan, deterministic reset, and bounded zoom controls.
       Dragged positions, viewport pan, and zoom are transient. Geometry and build
       checks pass; browser interaction verification remains open.
+- [~] W9: Use a consistent readable type scale, spacing rhythm, button hierarchy,
+      cards, and restrained color tokens across the workbench. Normal prose uses
+      sans-serif typography; monospace is limited to code, IDs, paths, locators,
+      model names, and exact compiled context. Implementation and automated checks
+      pass; browser visual verification remains open.
 
 ## 7. Data model
 
@@ -223,6 +231,10 @@ selection reasons. No source text or secrets in request logs.
       overlap, dragging updates incident edges, Reset layout restores deterministic
       positions, the dotted background covers the full panel, background dragging
       pans without moving nodes, and the corner controls zoom within documented limits.
+- [ ] A7: The selected-node panel presents title, summary, status, primary actions,
+      overview metrics, content, relationships, and provenance in that order; raw
+      technical metadata is collapsed by default, and the detail/history/form/task
+      surfaces use one consistent typography and spacing system.
 
 ## 15. Test plan
 
@@ -233,6 +245,8 @@ selection reasons. No source text or secrets in request logs.
 - A6: `tests/workbench/layout.test.ts` — circular collision spacing, bounds,
   deterministic reset coordinates, title wrapping/truncation, circle-edge
   intersections, zoom clamping, and drag-pan offset calculation.
+- A7: production build/typecheck plus the browser checklist; semantic HTML remains
+  keyboard navigable and all existing labels/values remain present.
 - §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
@@ -270,6 +284,10 @@ selection reasons. No source text or secrets in request logs.
     confirm dots cover the full viewport, exercise `− / percentage / +`, then Reset
     layout and confirm the original arrangement returns without selecting a node
     during a drag.
+11. Select canonical and inferred nodes. Confirm the right panel has a clear title
+    and action hierarchy, readable prose, compact relationship cards, accessible
+    evidence, and collapsed Technical details. Open History, Edit, and Task context
+    and confirm their typography, controls, focus states, and spacing are consistent.
 
 ## 16. Implementation plan
 
@@ -282,6 +300,9 @@ selection reasons. No source text or secrets in request logs.
 - [~] Add collision-aware circular layout, bounded labels, pointer dragging,
       background drag-to-pan, full-viewport grid, corner zoom controls, and reset;
       verify geometry automatically and complete browser interaction check (A6).
+- [~] Apply the shared typography/color/spacing system and restructure node detail;
+      verify build/accessibility invariants automatically and complete browser visual
+      review (A7).
 
 ## 17. Alternatives considered
 
@@ -351,6 +372,11 @@ Findings from the read/edit/history slice:
   empty panel space as well as the SVG at every zoom.
   Edge labels stay quiet until related to the selected node, highlighted by a task
   path, or hovered, reducing default clutter.
+- The workbench uses a dependency-free system sans stack and an 8 px-oriented spacing
+  rhythm. Monospace is reserved for technical values and exact agent context. The
+  detail panel exposes the same data as before but progressively discloses raw IDs,
+  paths, and revision metadata under native `<details>` rather than presenting the
+  entire node as a database-style definition list.
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph
   snapshot so archived nodes open in the same detail/history/restore path.
 
