@@ -39,10 +39,12 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
    a deterministic in-app force layout with collision-aware spacing on a roomy
    network canvas. Nodes render as colored circles with bounded labels, using a
    dashed outline for inferred context. Users can drag nodes to refine the transient
-   layout, reset them to the deterministic layout, and zoom with corner-mounted
-   minus/percentage/plus controls. Edges are directed arrows labeled by type
-   (dashed when inferred). A "List" toggle shows the same nodes as a table
-   filterable by type and text, so the graph is never the only navigation.
+   layout, drag the dotted background to pan, reset them to the deterministic
+   layout, and zoom with corner-mounted minus/percentage/plus controls. The dotted
+   background covers the full graph viewport at every zoom. Edges are directed
+   arrows labeled by type (dashed when inferred). A "List" toggle shows the same
+   nodes as a table filterable by type and text, so the graph is never the only
+   navigation.
 3. Clicking a node shows: title, type, authority label, importance, confidence,
    version, actor/reason, external key/path, content, summary; relationships as
    directed sentences ("this node → REQUIRES → Idempotency (canonical)"); the
@@ -88,9 +90,9 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       successful bundle as if it belonged to a failed or still-running request.
 - [~] W8: Keep active graph nodes and their title text visually distinct at the
       default layout, allow pointer dragging without accidental selection, and
-      provide deterministic reset and bounded zoom controls. Dragged positions and
-      zoom are transient. Geometry and build checks pass; browser interaction
-      verification remains open.
+      provide background drag-to-pan, deterministic reset, and bounded zoom controls.
+      Dragged positions, viewport pan, and zoom are transient. Geometry and build
+      checks pass; browser interaction verification remains open.
 
 ## 7. Data model
 
@@ -219,7 +221,8 @@ selection reasons. No source text or secrets in request logs.
 - [ ] A5: The complete demo in the MVP plan succeeds, including a history change and subsequent current-context retrieval.
 - [ ] A6: At the default demo viewport, circular nodes and bounded labels do not
       overlap, dragging updates incident edges, Reset layout restores deterministic
-      positions, and the corner controls zoom within documented limits.
+      positions, the dotted background covers the full panel, background dragging
+      pans without moving nodes, and the corner controls zoom within documented limits.
 
 ## 15. Test plan
 
@@ -229,7 +232,7 @@ selection reasons. No source text or secrets in request logs.
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
 - A6: `tests/workbench/layout.test.ts` — circular collision spacing, bounds,
   deterministic reset coordinates, title wrapping/truncation, circle-edge
-  intersections, and zoom clamping.
+  intersections, zoom clamping, and drag-pan offset calculation.
 - §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
@@ -262,9 +265,11 @@ selection reasons. No source text or secrets in request logs.
 9. Run `npm run build`, `npm test`, `npm run test:integration`, `npm run typecheck`,
    `npm run lint`, `npm run format:check`.
 10. In Graph view, confirm the circular network and labels have breathing room; drag
-    nodes from both mouse and touch input, confirm incident arrows follow, exercise
-    `− / 100% / +` zoom controls, then Reset layout and confirm the original
-    arrangement returns without selecting a node during a drag.
+    nodes from both mouse and touch input and confirm incident arrows follow. Zoom in,
+    drag the dotted background to pan in every direction without moving a node,
+    confirm dots cover the full viewport, exercise `− / percentage / +`, then Reset
+    layout and confirm the original arrangement returns without selecting a node
+    during a drag.
 
 ## 16. Implementation plan
 
@@ -275,8 +280,8 @@ selection reasons. No source text or secrets in request logs.
       but A4 panel rendering and clipboard verification remain in the browser checklist.
 - [~] Execute the manual demo checklist (A5): API-level run of steps 1–7 verified over HTTP on 2026-09-19; browser walkthrough is the operator's final check. All automated checks pass; durable context updated; committed.
 - [~] Add collision-aware circular layout, bounded labels, pointer dragging,
-      corner zoom controls, and reset; verify geometry automatically and complete
-      browser interaction check (A6).
+      background drag-to-pan, full-viewport grid, corner zoom controls, and reset;
+      verify geometry automatically and complete browser interaction check (A6).
 
 ## 17. Alternatives considered
 
@@ -340,7 +345,10 @@ Findings from the read/edit/history slice:
   grid fallback, preserving an organic network shape. Pointer dragging updates only
   React layout state and incident edge geometry; reset/reload/graph mutation restores
   deterministic positions. Scrollable zoom defaults to 140% for label readability,
-  is transient, and is clamped from 60% to 200%.
+  is transient, and is clamped from 60% to 200%. Background pointer dragging changes
+  the scroll viewport rather than graph coordinates; node pointer dragging remains
+  separately captured. The dotted grid belongs to the viewport layer, so it covers
+  empty panel space as well as the SVG at every zoom.
   Edge labels stay quiet until related to the selected node, highlighted by a task
   path, or hovered, reducing default clutter.
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph

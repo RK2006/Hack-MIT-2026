@@ -178,6 +178,15 @@ export function clampGraphZoom(zoom: number): number {
   return Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, round(zoom)));
 }
 
+/** Maps a background drag to a non-negative scroll offset. */
+export function dragPanOffset(
+  startScroll: number,
+  startPointer: number,
+  currentPointer: number,
+): number {
+  return Math.max(0, startScroll + startPointer - currentPointer);
+}
+
 /** Wraps a card title to a bounded number of deterministic SVG text lines. */
 export function wrapGraphTitle(title: string, maxChars = 24, maxLines = 2): string[] {
   let remaining = title.trim().replace(/\s+/g, ' ');

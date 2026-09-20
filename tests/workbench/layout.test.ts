@@ -3,6 +3,7 @@ import demo from '../../fixtures/demo-payments.json';
 import {
   circleBoundaryPoint,
   clampGraphZoom,
+  dragPanOffset,
   graphLabelsOverlap,
   GRAPH_NODE_MIN_DISTANCE,
   GRAPH_NODE_RADIUS,
@@ -126,6 +127,12 @@ describe('graph node geometry', () => {
     expect(clampGraphZoom(0.2)).toBe(GRAPH_ZOOM_MIN);
     expect(clampGraphZoom(1.2)).toBe(1.2);
     expect(clampGraphZoom(3)).toBe(GRAPH_ZOOM_MAX);
+  });
+
+  it('maps background dragging to scroll offsets without going negative', () => {
+    expect(dragPanOffset(300, 500, 440)).toBe(360);
+    expect(dragPanOffset(300, 500, 560)).toBe(240);
+    expect(dragPanOffset(20, 100, 180)).toBe(0);
   });
 
   it('wraps titles to two bounded lines and marks truncation', () => {

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import {
   circleBoundaryPoint,
   clampGraphZoom,
+  dragPanOffset,
   GRAPH_LABEL_MAX_HEIGHT,
   GRAPH_LABEL_WIDTH,
   GRAPH_NODE_MIN_DISTANCE,
@@ -57,8 +58,16 @@ export default function GraphView({
     positions: Map<string, Point>;
   }>({ key: layoutKey, positions: defaultPositions });
   const [zoom, setZoom] = useState(GRAPH_ZOOM_DEFAULT);
+  const [isPanning, setIsPanning] = useState(false);
   const positions = layoutState.key === layoutKey ? layoutState.positions : defaultPositions;
   const svgRef = useRef<SVGSVGElement>(null);
+  const panRef = useRef<{
+    pointerId: number;
+    startClientX: number;
+    startClientY: number;
+    startScrollLeft: number;
+    startScrollTop: number;
+  } | null>(null);
   const dragRef = useRef<{
     nodeId: string;
     pointerId: number;
@@ -88,6 +97,12 @@ export default function GraphView({
     dragRef.current = null;
   };
 
+  const endPan = (pointerId: number) => {
+    if (panRef.current?.pointerId !== pointerId) return;
+    panRef.current = null;
+    setIsPanning(false);
+  };
+
   if (nodes.length === 0) {
     return <p className="empty">This project has no active nodes.</p>;
   }
@@ -95,7 +110,7 @@ export default function GraphView({
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
-        <span>Drag nodes to adjust the network. Use the corner controls to zoom.</span>
+        <span>Drag nodes to arrange them. Drag empty space to pan. Use the corner to zoom.</span>
         <button
           type="button"
           onClick={() => setLayoutState({ key: layoutKey, positions: new Map(defaultPositions) })}
@@ -104,7 +119,39 @@ export default function GraphView({
         </button>
       </div>
       <div className="graph-stage">
-        <div className="graph-scroll">
+        <div
+          className={`graph-scroll${isPanning ? ' graph-panning' : ''}`}
+          aria-label="Pannable graph viewport"
+          onPointerDown={(event) => {
+            if (event.button !== 0 || (event.target as Element).closest('.node')) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            panRef.current = {
+              pointerId: event.pointerId,
+              startClientX: event.clientX,
+              startClientY: event.clientY,
+              startScrollLeft: event.currentTarget.scrollLeft,
+              startScrollTop: event.currentTarget.scrollTop,
+            };
+            setIsPanning(true);
+            event.preventDefault();
+          }}
+          onPointerMove={(event) => {
+            const pan = panRef.current;
+            if (!pan || pan.pointerId !== event.pointerId) return;
+            event.currentTarget.scrollLeft = dragPanOffset(
+              pan.startScrollLeft,
+              pan.startClientX,
+              event.clientX,
+            );
+            event.currentTarget.scrollTop = dragPanOffset(
+              pan.startScrollTop,
+              pan.startClientY,
+              event.clientY,
+            );
+          }}
+          onPointerUp={(event) => endPan(event.pointerId)}
+          onPointerCancel={(event) => endPan(event.pointerId)}
+        >
           <svg
             ref={svgRef}
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
