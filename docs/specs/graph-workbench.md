@@ -114,6 +114,21 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       sans-serif typography; monospace is limited to code, IDs, paths, locators,
       model names, and exact compiled context. Implementation and automated checks
       pass; browser visual verification remains open.
+- [~] W9a: Adopt the "field notebook" visual direction. Pale sage-grey paper with
+      muted green-grey hairline rules; sections are separated by rules and whitespace,
+      not bordered/shadowed cards. Typography: Bricolage Grotesque for headings and
+      node titles, Source Sans 3 for UI chrome and prose, Fira Code for IDs, paths,
+      locators, model names, and exact compiled context, all loaded via `next/font`
+      (self-hosted at build, no runtime dependency). Moss ink text; one rust accent
+      for links and primary actions; amber reserved for task selection. Text inputs
+      are underlined fields rather than boxes; badges are small-caps text rather than
+      pills. Authority uses one device everywhere (canonical = solid rule/green ink;
+      inferred = dashed rule/ochre ink). Every color, including SVG graph strokes and
+      node type colors, comes from `globals.css` tokens or `shared.tsx` `NODE_COLORS`;
+      components carry no hardcoded hex values. Existing class names and markup are
+      unchanged. (A dark "instrument panel" variant and a cream/serif "editorial"
+      variant were both tried in the browser and rejected: the first as a generic
+      dev-tool look, the second as too close to a well-known AI assistant's brand.)
 - [~] W10: Separate node inspection and task compilation into full-height right-rail
       tabs, preserve task state while switching, show a compact compiled-result
       summary in the task tab, and progressively disclose secondary task controls.
@@ -345,6 +360,10 @@ selection reasons. No source text or secrets in request logs.
 - [~] Replace the stacked detail/task split with persistent tab panels, simplify the
       task form with progressive disclosure and result summary, and clarify inferred
       graph styling; verify automated checks and complete browser visual review (A8).
+- [~] Apply the field-notebook theme (W9a): load Bricolage Grotesque / Source Sans 3 /
+      Fira Code via `next/font`, replace the token set and remove card chrome in
+      `globals.css`, move GraphView SVG colors into CSS classes and retune `NODE_COLORS`
+      for sage paper; verify typecheck/lint/format/unit/build and review in the browser.
 
 ## 17. Alternatives considered
 

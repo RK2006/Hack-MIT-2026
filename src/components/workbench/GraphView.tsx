@@ -163,17 +163,21 @@ export default function GraphView({
             aria-label={`Graph with ${nodes.length} nodes and ${edges.length} edges`}
           >
             <defs>
-              <marker
-                id="arrow"
-                viewBox="0 0 10 10"
-                refX="10"
-                refY="5"
-                markerWidth="8"
-                markerHeight="8"
-                orient="auto-start-reverse"
-              >
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#555" />
-              </marker>
+              {(['arrow', 'arrow-path'] as const).map((id) => (
+                <marker
+                  key={id}
+                  id={id}
+                  className={`marker-${id}`}
+                  viewBox="0 0 10 10"
+                  refX="10"
+                  refY="5"
+                  markerWidth="8"
+                  markerHeight="8"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" />
+                </marker>
+              ))}
             </defs>
             {edges.map((edge) => {
               const from = positions.get(edge.fromNodeId);
@@ -193,12 +197,11 @@ export default function GraphView({
                 >
                   <title>{label}</title>
                   <path
+                    className="edge-line"
                     d={`M ${geometry.start.x} ${geometry.start.y} Q ${geometry.control.x} ${geometry.control.y} ${geometry.end.x} ${geometry.end.y}`}
                     fill="none"
-                    stroke={onPath ? '#f59e0b' : '#555'}
-                    strokeWidth={onPath ? 3 : 1.2}
                     strokeDasharray={inferred ? '5 4' : undefined}
-                    markerEnd="url(#arrow)"
+                    markerEnd={onPath ? 'url(#arrow-path)' : 'url(#arrow)'}
                   />
                   <g
                     className="edge-label-group"
@@ -287,20 +290,13 @@ export default function GraphView({
                   }}
                 >
                   {highlighted ? (
-                    <circle
-                      r={GRAPH_NODE_RADIUS + 7}
-                      fill="none"
-                      stroke="#f59e0b"
-                      strokeWidth={4}
-                    />
+                    <circle className="node-highlight-ring" r={GRAPH_NODE_RADIUS + 7} fill="none" />
                   ) : null}
                   <circle
-                    className="node-circle"
+                    className={`node-circle${selected ? ' node-circle-selected' : ''}`}
                     r={GRAPH_NODE_RADIUS}
                     fill={NODE_COLORS[node.type]}
-                    fillOpacity={inferred ? 0.78 : 0.96}
-                    stroke={selected ? '#111827' : '#fff'}
-                    strokeWidth={selected ? 3 : 2}
+                    fillOpacity={inferred ? 0.72 : 1}
                     strokeDasharray={inferred ? '6 4' : undefined}
                   />
                   {inferred ? (

@@ -1,13 +1,15 @@
 import type { Authority, NodeType } from '@/server/context/types';
 
+// Ink-like tones for the sage paper surfaces; the amber task highlight and the rust accent
+// are deliberately not reused here so a highlighted node is never confused with a node type.
 export const NODE_COLORS: Record<NodeType, string> = {
-  component: '#2563eb',
-  file: '#6b7280',
-  decision: '#7c3aed',
-  constraint: '#dc2626',
-  assumption: '#d97706',
-  discovery: '#0891b2',
-  bug: '#db2777',
+  component: '#2b5f8e',
+  file: '#6f7a72',
+  decision: '#5a4b8f',
+  constraint: '#a03a3a',
+  assumption: '#7d6a2a',
+  discovery: '#1f7a72',
+  bug: '#a3427c',
 };
 
 export function AuthorityBadge({ authority }: { authority: Authority }) {
