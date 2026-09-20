@@ -34,12 +34,15 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
 ## 5. User experience
 
 1. `/` lists projects; choosing one opens `/projects/<projectId>`.
-2. The project page has three regions: graph/list (left), detail panel (right),
-   task panel (bottom of the right column, collapsible). The graph is an SVG with
+2. The project page has two workspace regions: graph/list (left) and a tabbed
+   inspector (right). The inspector gives node details and task context separate,
+   full-height tabs so neither workflow competes for vertical space. Switching tabs
+   preserves an in-progress task and compiled result; selecting a node from task
+   results returns to node details. The graph is an SVG with
    a deterministic in-app force layout with collision-aware spacing on a roomy
    network canvas. Nodes render as colored circles with bounded labels, using a
-   dashed outline for inferred context. Users can drag nodes to refine the transient
-   layout, drag the dotted background to pan, reset them to the deterministic
+   dashed outline plus an explicit badge for inferred context. Users can drag nodes
+   to refine the transient layout, drag the dotted background to pan, reset them to the deterministic
    layout, and zoom with corner-mounted minus/percentage/plus controls. The dotted
    background covers the full graph viewport at every zoom. Edges are directed
    arrows labeled by type (dashed when inferred). A "List" toggle shows the same
@@ -59,9 +62,11 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
 5. "History" lists revisions; choosing two shows a field-by-field comparison and
    each revision's source. Comparison never writes.
 6. "Archived" tab lists archived nodes for detail/history/restore.
-7. Task panel: task text, token budget (256–8,192, default 4,096), depth (0–3),
+7. Task context tab: task text, token budget (256–8,192, default 4,096), depth (0–3),
    optional start = selected node, "Allow degraded" checkbox off by default,
-   Compile. Result: status, tokenizer, model, measured tokens vs budget vs
+   Compile. Depth, start-node behavior, and degraded fallback are grouped under
+   progressive Advanced options. The tab shows a compact selected-node/token summary
+   after compilation. Result: status, tokenizer, model, measured tokens vs budget vs
    measured project context tokens, ranked selected items with reasons/paths and
    authority labels, omissions, warnings, rendered text with Copy. Each graph
    reason lists its path steps (from → TYPE → to, with edge authority), and the
@@ -101,6 +106,10 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       sans-serif typography; monospace is limited to code, IDs, paths, locators,
       model names, and exact compiled context. Implementation and automated checks
       pass; browser visual verification remains open.
+- [~] W10: Separate node inspection and task compilation into full-height right-rail
+      tabs, preserve task state while switching, show a compact compiled-result
+      summary in the task tab, and progressively disclose secondary task controls.
+      Implementation and automated checks pass; browser visual verification remains open.
 
 ## 7. Data model
 
@@ -235,6 +244,10 @@ selection reasons. No source text or secrets in request logs.
       overview metrics, content, relationships, and provenance in that order; raw
       technical metadata is collapsed by default, and the detail/history/form/task
       surfaces use one consistent typography and spacing system.
+- [ ] A8: Node details and task context occupy separate full-height right-rail tabs;
+      task inputs/results survive tab switches, advanced controls are collapsed by
+      default, a compiled result is summarized in the tab, and inferred nodes combine
+      a dashed outline with a readable authority badge.
 
 ## 15. Test plan
 
@@ -247,6 +260,9 @@ selection reasons. No source text or secrets in request logs.
   intersections, zoom clamping, and drag-pan offset calculation.
 - A7: production build/typecheck plus the browser checklist; semantic HTML remains
   keyboard navigable and all existing labels/values remain present.
+- A8: production build/typecheck plus the browser checklist; tab/tabpanel relationships,
+  preserved mounted task state, advanced disclosure, and graph authority labels remain
+  keyboard and screen-reader discoverable.
 - §8 same-origin rule and error mapping: `tests/workbench/http.test.ts`.
 
 ### Integration tests (`tests/workbench/routes.integration.test.ts`)
@@ -288,6 +304,11 @@ selection reasons. No source text or secrets in request logs.
     and action hierarchy, readable prose, compact relationship cards, accessible
     evidence, and collapsed Technical details. Open History, Edit, and Task context
     and confirm their typography, controls, focus states, and spacing are consistent.
+12. Switch repeatedly between Node details and Task context before and after compiling.
+    Confirm task inputs/results persist, the compiled count/token summary appears in
+    the tab, Advanced options are collapsed initially, and selecting a result opens
+    that node's details. Confirm inferred graph nodes show both a dashed outline and
+    an explicit Inferred marker while every node body remains circular.
 
 ## 16. Implementation plan
 
@@ -303,6 +324,9 @@ selection reasons. No source text or secrets in request logs.
 - [~] Apply the shared typography/color/spacing system and restructure node detail;
       verify build/accessibility invariants automatically and complete browser visual
       review (A7).
+- [~] Replace the stacked detail/task split with persistent tab panels, simplify the
+      task form with progressive disclosure and result summary, and clarify inferred
+      graph styling; verify automated checks and complete browser visual review (A8).
 
 ## 17. Alternatives considered
 
@@ -326,6 +350,13 @@ small node forms proves inspection/review without those dependencies.
 Persistence would require a new user-layout model and mutation API for presentation
 state that is not canonical project knowledge. For the MVP, dragging is local UI
 state and Reset/reload returns to the deterministic graph.
+
+### Bottom task drawer or dedicated task page
+
+A full-width drawer gives results more room but obscures the graph that explains the
+selection. A dedicated page also breaks the immediate highlight-and-inspect loop. A
+mutually exclusive right-rail tab keeps the graph visible, removes nested vertical
+competition, and can preserve the task component state without a new persistence model.
 
 ## 18. Durable context created by this feature
 
@@ -382,6 +413,11 @@ Findings from the read/edit/history slice:
 
 Findings from the task-panel integration:
 
+- Node details and task compilation are sibling tab panels in the right rail rather
+  than vertically stacked regions. Both remain mounted while one is hidden, so task
+  inputs and compiled results survive inspection switches without persisting a new
+  browser or server model. Selecting a task result deliberately returns to node
+  details, while the compact task-tab summary remains visible.
 - `TaskPanel` is the only consumer of `ContextBundle`; it renders reasons and
   `PathStep` sequences verbatim from the compiler and never re-ranks. Highlights
   (node IDs plus path edge IDs) are derived from the displayed bundle and cleared

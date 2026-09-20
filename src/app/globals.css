@@ -309,6 +309,10 @@ tr.changed {
   background: none;
   border: 2px dashed #555;
 }
+.swatch-solid {
+  background: none;
+  border: 2px solid #555;
+}
 .swatch-highlight {
   background: none;
   border: 3px solid var(--highlight);
@@ -379,27 +383,50 @@ tr.changed {
   min-height: 0;
   background: #f3f6fa;
 }
-.right-top {
+.inspector-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  background: var(--panel);
+}
+.inspector-tab {
+  display: flex;
+  min-width: 0;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+}
+.inspector-tab:hover {
+  background: var(--panel-subtle);
+}
+.inspector-tab.active {
+  border-color: var(--border);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.inspector-tab-summary {
+  overflow: hidden;
+  color: var(--accent);
+  font-size: 10.5px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.inspector-panel {
   flex: 1;
+  min-height: 0;
   overflow: auto;
   padding: 20px;
 }
-.right-bottom {
-  border-top: 1px solid var(--border);
-  padding: 12px 16px;
-  max-height: 60%;
-  overflow: auto;
-  background: var(--panel);
-  box-shadow: 0 -5px 18px rgb(15 23 42 / 4%);
-}
-.collapse {
-  min-height: 26px;
-  border: none;
-  background: none;
-  box-shadow: none;
-  color: #344054;
-  font-weight: 680;
-  padding: 0 0 6px;
+.inspector-panel[hidden] {
+  display: none;
 }
 
 /* Graph */
@@ -484,6 +511,20 @@ tr.changed {
   fill: rgb(255 255 255 / 92%);
   stroke: #dbe3ee;
   stroke-width: 0.8;
+}
+.graph .node-authority-marker {
+  pointer-events: none;
+}
+.graph .node-authority-marker rect {
+  fill: #fffbeb;
+  stroke: #d97706;
+  stroke-width: 1;
+}
+.graph .node-authority-marker text {
+  fill: #92400e;
+  font-size: 6.5px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
 }
 .graph-zoom {
   position: absolute;
@@ -961,6 +1002,37 @@ tr.changed {
   width: 100%;
   box-sizing: border-box;
   font: inherit;
+}
+.task-primary-controls {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}
+.task-primary-controls label {
+  width: 130px;
+  margin: 0;
+}
+.task-primary-controls button {
+  flex: 1;
+}
+.task-advanced {
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.task-advanced summary {
+  padding: 9px 2px;
+  color: #344054;
+  font-size: 12.5px;
+  font-weight: 680;
+  cursor: pointer;
+}
+.task-advanced[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+.task-advanced .task-controls {
+  padding: 12px 2px 4px;
 }
 .task-controls {
   display: flex;

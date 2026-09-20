@@ -304,6 +304,18 @@ export default function GraphView({
                     strokeWidth={selected ? 3 : 2}
                     strokeDasharray={inferred ? '6 4' : undefined}
                   />
+                  {inferred ? (
+                    <g
+                      className="node-authority-marker"
+                      transform={`translate(0 ${-GRAPH_NODE_RADIUS})`}
+                      aria-hidden="true"
+                    >
+                      <rect x={-23} y={-8} width={46} height={16} rx={8} />
+                      <text y={3} textAnchor="middle">
+                        INFERRED
+                      </text>
+                    </g>
+                  ) : null}
                   <text y={3.5} textAnchor="middle" className="node-type">
                     {node.type.slice(0, 2).toUpperCase()}
                   </text>
@@ -362,7 +374,11 @@ export default function GraphView({
         ))}
         <li>
           <span className="swatch swatch-dashed" aria-hidden="true" />
-          dashed = inferred
+          dashed + badge = inferred
+        </li>
+        <li>
+          <span className="swatch swatch-solid" aria-hidden="true" />
+          solid = canonical
         </li>
         <li>
           <span className="swatch swatch-highlight" aria-hidden="true" />

@@ -15,7 +15,10 @@ export type TaskPanelProps = {
   graphVersion: number;
   onHighlight: (nodeIds: string[], edgeIds?: string[]) => void;
   onSelectNode: (nodeId: string) => void;
+  onSummaryChange: (summary: TaskSummary) => void;
 };
+
+export type TaskSummary = { selectedCount: number; tokenCount: number } | null;
 
 type Result =
   | { kind: 'idle' }
@@ -73,7 +76,8 @@ function ReasonList({
 }
 
 export default function TaskPanel(props: TaskPanelProps) {
-  const { projectId, selectedNodeId, graphVersion, onHighlight, onSelectNode } = props;
+  const { projectId, selectedNodeId, graphVersion, onHighlight, onSelectNode, onSummaryChange } =
+    props;
   const [task, setTask] = useState(DEFAULT_TASK);
   const [budget, setBudget] = useState<number>(REQUEST_LIMITS.budgetDefault);
   const [depth, setDepth] = useState<number>(REQUEST_LIMITS.depthDefault);
@@ -136,12 +140,18 @@ export default function TaskPanel(props: TaskPanelProps) {
   const bundle = result.kind === 'bundle' ? result.bundle : null;
   const stale = result.kind === 'bundle' && result.graphVersion !== graphVersion;
 
+  useEffect(() => {
+    onSummaryChange(
+      bundle ? { selectedCount: bundle.selected.length, tokenCount: bundle.tokenCount } : null,
+    );
+  }, [bundle, onSummaryChange]);
+
   return (
     <section className="task-panel" aria-label="Task context">
       <header className="task-heading">
         <div>
           <span className="section-kicker">Agent handoff</span>
-          <h2>Task context</h2>
+          <h2>Build task context</h2>
         </div>
         <p>Compile only the project knowledge this task needs.</p>
       </header>
@@ -162,7 +172,7 @@ export default function TaskPanel(props: TaskPanelProps) {
             required
           />
         </label>
-        <div className="task-controls">
+        <div className="task-primary-controls">
           <label>
             Token budget
             <input
@@ -174,34 +184,6 @@ export default function TaskPanel(props: TaskPanelProps) {
               onChange={(event) => setBudget(Number(event.target.value))}
             />
           </label>
-          <label>
-            Depth
-            <input
-              type="number"
-              min={0}
-              max={REQUEST_LIMITS.depthMax}
-              step={1}
-              value={depth}
-              onChange={(event) => setDepth(Number(event.target.value))}
-            />
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={useStart}
-              disabled={!selectedNodeId}
-              onChange={(event) => setUseStart(event.target.checked)}
-            />
-            Start from selected node
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={allowDegraded}
-              onChange={(event) => setAllowDegraded(event.target.checked)}
-            />
-            Allow degraded (lexical) fallback
-          </label>
           <button
             type="submit"
             className="button-primary"
@@ -210,6 +192,39 @@ export default function TaskPanel(props: TaskPanelProps) {
             {result.kind === 'running' ? 'Compiling…' : 'Compile context'}
           </button>
         </div>
+        <details className="task-advanced">
+          <summary>Advanced options</summary>
+          <div className="task-controls">
+            <label>
+              Graph depth
+              <input
+                type="number"
+                min={0}
+                max={REQUEST_LIMITS.depthMax}
+                step={1}
+                value={depth}
+                onChange={(event) => setDepth(Number(event.target.value))}
+              />
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={useStart}
+                disabled={!selectedNodeId}
+                onChange={(event) => setUseStart(event.target.checked)}
+              />
+              Start from selected node
+            </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={allowDegraded}
+                onChange={(event) => setAllowDegraded(event.target.checked)}
+              />
+              Allow degraded (lexical) fallback
+            </label>
+          </div>
+        </details>
       </form>
 
       {result.kind === 'running' ? (
