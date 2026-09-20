@@ -1548,3 +1548,326 @@ table.archived td:first-child {
   letter-spacing: 0.01em;
   user-select: all;
 }
+
+/* ---------------------------------------------------------------------------
+   Cover: the first screen. Same paper as the workbench; the mechanism drawn once.
+   Timeline (s): 0–1.1 ink the graph · 1.3 mark the task's nodes · 1.9 draw the
+   bundle card · 2.1–2.9 gather · 3.1 hand off. Begin is live the whole time.
+--------------------------------------------------------------------------- */
+.cover {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background:
+    radial-gradient(120% 80% at 70% 30%, rgb(255 255 255 / 55%), transparent 60%), var(--bg);
+  transition:
+    opacity 720ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    transform 720ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 720ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.cover.leaving {
+  opacity: 0;
+  transform: translateY(-18px) scale(1.012);
+  filter: blur(6px);
+  pointer-events: none;
+}
+.cover-inner {
+  width: min(1120px, 100% - 64px);
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(280px, 5fr) minmax(320px, 7fr);
+  align-items: center;
+  gap: 48px;
+}
+.cover-inner > * {
+  min-width: 0;
+}
+.cover-word {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.cover-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: clamp(56px, 8.5vw, 112px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+  color: var(--text);
+  animation: cover-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cover-line {
+  margin: 20px 0 0;
+  max-width: 34ch;
+  font-size: 17px;
+  font-style: italic;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-wrap: balance;
+  animation: cover-rise 900ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.cover-begin {
+  margin-top: 36px;
+  min-height: 44px;
+  padding: 0 18px 0 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--bg);
+  background: var(--text);
+  border: 1px solid var(--text);
+  border-radius: var(--radius);
+  box-shadow: 0 6px 18px -8px rgb(31 42 34 / 45%);
+  cursor: pointer;
+  animation: cover-rise 900ms 240ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  transition:
+    background 160ms ease,
+    transform 160ms ease,
+    box-shadow 160ms ease;
+}
+.cover-begin:hover:not(:disabled) {
+  background: var(--text-secondary);
+  border-color: var(--text-secondary);
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px -10px rgb(31 42 34 / 50%);
+}
+.cover-begin:hover:not(:disabled) .cover-begin-arrow {
+  transform: translateX(4px);
+}
+.cover-begin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.cover-begin-arrow {
+  display: inline-block;
+  transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.cover-foot {
+  position: absolute;
+  right: 32px;
+  bottom: 24px;
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  animation: cover-fade 1200ms 600ms ease both;
+}
+@keyframes cover-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes cover-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Cover sketch ------------------------------------------------------------- */
+.sketch {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.sketch-edge {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  stroke-linecap: round;
+  stroke-dasharray: 700;
+  stroke-dashoffset: 700;
+  animation: sketch-draw 700ms calc(80ms + var(--i) * 45ms) cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.sketch-edge.inside {
+  animation:
+    sketch-draw 700ms calc(80ms + var(--i) * 45ms) cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    sketch-edge-ink 500ms 1300ms ease both,
+    sketch-edge-out 500ms 2100ms ease both;
+}
+.sketch-edge:not(.inside) {
+  animation:
+    sketch-draw 700ms calc(80ms + var(--i) * 45ms) cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    sketch-dim 600ms 1300ms ease both;
+}
+@keyframes sketch-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes sketch-edge-ink {
+  to {
+    stroke: var(--accent);
+    stroke-width: 1.5;
+  }
+}
+@keyframes sketch-edge-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes sketch-dim {
+  to {
+    opacity: 0.3;
+  }
+}
+
+.sketch-node {
+  transform-box: view-box;
+  animation: sketch-pop 420ms calc(120ms + var(--i) * 55ms) cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.sketch-node-dot {
+  fill: var(--panel);
+  stroke: var(--text);
+  stroke-width: 1.4;
+  transition: none;
+}
+.sketch-node:not(.picked) .sketch-node-dot {
+  animation: sketch-dim 600ms 1300ms ease both;
+}
+.sketch-node.picked .sketch-node-dot {
+  animation:
+    sketch-mark 420ms 1300ms cubic-bezier(0.16, 1, 0.3, 1) both,
+    sketch-shrink 500ms 2100ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.sketch-node.picked {
+  animation:
+    sketch-pop 420ms calc(120ms + var(--i) * 55ms) cubic-bezier(0.16, 1, 0.3, 1) both,
+    sketch-gather 800ms calc(2100ms + var(--i) * 40ms) cubic-bezier(0.3, 0.7, 0.1, 1) both;
+}
+@keyframes sketch-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes sketch-mark {
+  to {
+    fill: var(--accent);
+    stroke: var(--accent);
+    r: 8;
+  }
+}
+@keyframes sketch-shrink {
+  to {
+    r: 3.5;
+    stroke-width: 0;
+  }
+}
+@keyframes sketch-gather {
+  to {
+    transform: translate(var(--tx), var(--ty));
+  }
+}
+
+.sketch-bundle-card {
+  fill: var(--panel);
+  fill-opacity: 0;
+  stroke: var(--text);
+  stroke-width: 1.2;
+  stroke-dasharray: 660;
+  stroke-dashoffset: 660;
+  animation:
+    sketch-draw 900ms 1900ms cubic-bezier(0.2, 0.7, 0.2, 1) both,
+    sketch-fill 500ms 2400ms ease both;
+}
+@keyframes sketch-fill {
+  to {
+    fill-opacity: 1;
+  }
+}
+.sketch-bundle-rule {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+  opacity: 0;
+  animation: cover-fade 300ms 2500ms ease both;
+}
+.sketch-bundle-label,
+.sketch-bundle-meta {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  fill: var(--muted);
+  opacity: 0;
+  animation: cover-fade 400ms 2600ms ease both;
+}
+.sketch-bundle-meta {
+  fill: var(--text-secondary);
+  animation-delay: 3100ms;
+}
+.sketch-bundle-line {
+  stroke: var(--text);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-dasharray: 140;
+  stroke-dashoffset: 140;
+  animation: sketch-draw 500ms calc(2500ms + var(--i) * 90ms) cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.sketch-handoff line,
+.sketch-handoff polyline {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 60;
+  stroke-dashoffset: 60;
+  animation: sketch-draw 500ms 3150ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+@media (max-width: 820px) {
+  .cover-inner {
+    grid-template-columns: minmax(0, 1fr);
+    width: min(560px, 100% - 40px);
+    gap: 28px;
+  }
+  .cover-word {
+    min-width: 0;
+  }
+  .cover-title {
+    font-size: clamp(52px, 16vw, 80px);
+  }
+  .sketch {
+    order: -1;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    aspect-ratio: 640 / 400;
+  }
+  .cover-foot {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cover,
+  .cover *,
+  .sketch * {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+  }
+  .sketch-node:not(.picked) .sketch-node-dot,
+  .sketch-edge:not(.inside) {
+    opacity: 0.3;
+  }
+}
