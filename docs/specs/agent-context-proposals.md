@@ -1,9 +1,9 @@
 # Feature Spec — Agent Context Proposals
 
-Status: Implemented and verified, including a live Gemini run
+Status: Implemented and verified, including live Gemini runs (short note and 13 KB document)
 Owner: Project team
 Related issue/task: [project spec](../PROJECT_SPEC.md) §6 Flow F and §7 stretch "LLM-generated candidate nodes/edges"; depends on [foundation](context-graph-foundation.md) authority rules; exposed via [agent handoff MCP](agent-handoff-mcp.md)
-Last updated: 2026-09-19
+Last updated: 2026-09-20
 
 ## 1. Summary
 
@@ -58,6 +58,7 @@ proposal queues/UI, or embedding calls (the compiler embeds new nodes lazily).
 - [x] P6: The write is one `store.transaction`; a store failure leaves no partial proposal.
 - [x] P7: Available as `npm run propose -- <projectId> <file>` (or stdin) and as the MCP tool `propose_context`.
 - [x] P8: Exactly one model backend behind the `ProposalModel` interface, selected from the environment: Anthropic Messages, OpenAI Chat Completions (JSON mode), or Gemini `generateContent` (JSON mime type), all via `fetch`. `PROPOSAL_PROVIDER` chooses explicitly; otherwise the first present key wins in the order anthropic → openai → gemini. `PROPOSAL_MODEL` overrides the vendor default (`claude-sonnet-4-5`, `gpt-4.1-mini`, `gemini-flash-latest,gemini-flash-lite-latest`) and may list comma-separated fallbacks; each model gets up to 4 attempts with 1/2/4 s backoff on 429/5xx/network before the next is tried, and provenance records the model that actually answered. Tests use a fixed model and mocked `fetch`.
+- [x] P9: The output budget (`max_tokens` / `maxOutputTokens`) is 16,000 for every vendor, because Gemini 3.x counts its thinking tokens against `maxOutputTokens` and a 5k-token prompt routinely spends 3–4k tokens thinking. A response the vendor reports as cut off at that limit (Gemini `finishReason: MAX_TOKENS`, Anthropic `stop_reason: max_tokens`, OpenAI `finish_reason: length`) is a `VALIDATION_ERROR` "Proposal model output was truncated…" naming provider and model, raised before JSON parsing and without trying a fallback model (the next model would truncate the same way).
 
 ## 7. Data model
 
@@ -113,7 +114,7 @@ Prompt: system text states the role (extract durable engineering knowledge, not
 code narration), the JSON contract, and that claims must be supported by the
 input; user text contains the optional task hint, the list of existing nodes as
 `key | type | title` lines (≤ 1,000 nodes, so ≤ ~40k characters), and the input
-text. Temperature 0, `max_tokens` 4,000. One retry on 429/5xx/network after 1 s;
+text. Temperature 0, `max_tokens` 16,000 (see P9). One retry on 429/5xx/network after 1 s;
 otherwise `graphError('EMBEDDING_UNAVAILABLE')` is *not* reused — add
 `MODEL_UNAVAILABLE` to `GraphErrorCode` (HTTP 503) for model backend failures.
 
@@ -141,7 +142,9 @@ colliding with existing external keys (suffix guarantees uniqueness); edges to
 archived nodes (dropped by store validation → reported); model proposes
 `component`/`file` (schema rejects → whole response invalid, reported to caller
 so it can retry); 0 nodes proposed (valid: result with empty `created`, no
-source written); project limits hit mid-write (transaction rolls back; error).
+source written); project limits hit mid-write (transaction rolls back; error);
+output cut off at the vendor's token limit (reported as truncation, not as
+"did not return JSON", so the caller knows to shorten or split the input).
 
 ## 12. Security / privacy considerations
 
@@ -161,6 +164,7 @@ counts only. Dropped items are returned to the caller with reasons.
 - [x] A1: With a fixed model, a proposal creates inferred nodes/edges with one agent source, correct actor, clamped confidence, unique keys; the workbench graph shows them as inferred.
 - [x] A2: Unresolvable/self/duplicate/archived-endpoint edges are dropped and reported while valid ones are written.
 - [x] A3: Malformed model JSON, forbidden types, and oversize input produce `VALIDATION_ERROR` with no writes; model backend failure produces `MODEL_UNAVAILABLE`.
+- [x] A6: A vendor response flagged as truncated is a `VALIDATION_ERROR` mentioning truncation with provider/model details and does not fall through to a fallback model (unit, mocked `fetch` for all three vendors); every vendor request carries the 16,000 output budget. A live run of the 13 KB synthetic Atlas Checkout document against the 130-node scanned project succeeds (manual, §18).
 - [x] A4: A proposed node can be reviewed to canonical through the existing revise route, and a later compile selects the revised version.
 - [x] A5: `npm run propose` and MCP `propose_context` return the same `ProposalResult` shape; a live Anthropic call succeeds when a valid key is present (manual, recorded in §18).
 
@@ -191,6 +195,12 @@ result in §18.
 - [x] CLI script + MCP tool registration; manual A5 live run performed with Gemini (see §18).
 - [x] Docs (README, this spec §18), commit/push.
 
+Large-input fix (2026-09-20):
+
+- [x] Raise the shared output budget to 16,000; add per-vendor truncation detection raising `VALIDATION_ERROR` before parsing (`model.ts`).
+- [x] Unit tests: truncation for all three vendors with no fallback attempt; request bodies carry the new budget (`tests/proposals/model.test.ts`).
+- [x] `npm test`, `npm run typecheck`, `npm run lint`; live re-run of the 13 KB document against the scanned `hackmit-2026` project (A6); record in §18; commit/push.
+
 ## 17. Alternatives considered
 
 ### Let the agent write nodes directly through generic MCP write tools
@@ -203,6 +213,14 @@ output and forced `inferred` authority is safer and matches Flow F.
 
 A review queue is cleaner UX but needs new schema and UI. Existing inferred
 nodes plus the archive action already give accept/reject semantics for the MVP.
+
+### Cap Gemini thinking with `thinkingLevel: 'low'` instead of raising the budget
+
+Would cut latency and cost, but `thinkingLevel` is a Gemini 3 parameter: 2.5
+models reject it (400, non-retryable) and `minimal` errors on 3.7/3.8 Flash,
+so it would couple the adapter to specific model generations. Raising the
+output ceiling is model-agnostic; `max_tokens` is a cap, not spend. Revisit if
+proposal latency becomes a problem.
 
 ## 18. Durable context created by this feature
 
@@ -239,3 +257,20 @@ vendor message is now surfaced in `MODEL_UNAVAILABLE.details.detail`. Models cit
 their own proposed nodes in `type.slug` form, so edge resolution also tries the
 normalized slug. `gemini-3-flash-preview` returned non-JSON despite the JSON mime
 type and was rejected as `VALIDATION_ERROR` with no writes, as designed.
+
+Large-input failure diagnosed and fixed on 2026-09-20: a 13 KB synthetic
+document (`/tmp` fixture, not in the repo) against the 130-node scanned
+`hackmit-2026` project failed 3/3 with "Proposal model did not return JSON"
+while a two-sentence note against the demo project succeeded. The raw
+responses showed `finishReason: MAX_TOKENS` every time: the prompt was 5,212
+tokens, `gemini-3.5-flash` spent 3,369–3,623 tokens *thinking*, and Gemini
+counts thinking against `maxOutputTokens`, leaving 360–613 tokens of the 4,000
+budget for the JSON, which was cut mid-object. With an empty graph the same
+document fit (2,189 thinking tokens), which is why input size alone looked like
+the cause. After raising the budget to 16,000 the same model/project/document
+completed 2/2 (`STOP`, 8 nodes + 4 edges, strict parse OK) with identical
+thinking spend. Truncation is now reported as such instead of as non-JSON.
+Also observed during the runs: `gemini-3.8-flash` returned 429 "exceeded your
+current quota" and 503 "high demand" for this key and fell through to the next
+model as designed; the non-thinking `gemini-3.1-flash-lite` needed no thinking
+tokens and answered the large document in 810 output tokens.

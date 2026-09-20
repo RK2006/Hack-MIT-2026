@@ -5,6 +5,7 @@ import {
   openAiProposalModel,
   proposalModelFromEnv,
   MAX_ATTEMPTS,
+  MAX_OUTPUT_TOKENS,
 } from '../../src/server/proposals/model';
 
 const prompt = { system: 'sys', user: 'usr' };
@@ -41,9 +42,42 @@ describe('anthropicProposalModel', () => {
     expect(JSON.parse(String(call!.init.body))).toMatchObject({
       model: 'claude-test',
       temperature: 0,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system: 'sys',
       messages: [{ role: 'user', content: 'usr' }],
     });
+  });
+
+  it('reports output cut off at the token limit as truncation, without trying a fallback model', async () => {
+    const truncatedBodies = {
+      anthropic: { stop_reason: 'max_tokens', content: [{ type: 'text', text: '{"nodes":[' }] },
+      openai: { choices: [{ finish_reason: 'length', message: { content: '{"nodes":[' } }] },
+      gemini: {
+        candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"nodes":[' }] } }],
+      },
+    };
+    const factories = {
+      anthropic: anthropicProposalModel,
+      openai: openAiProposalModel,
+      gemini: geminiProposalModel,
+    };
+    for (const provider of ['anthropic', 'openai', 'gemini'] as const) {
+      let attempts = 0;
+      const model = factories[provider]({
+        apiKey: 'k',
+        model: 'first, spare',
+        fetchImpl: async () => {
+          attempts += 1;
+          return jsonResponse(200, truncatedBodies[provider]);
+        },
+      });
+      await expect(model.complete(prompt)).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        message: expect.stringContaining('truncated'),
+        details: { provider, model: 'first', path: '$' },
+      });
+      expect(attempts).toBe(1);
+    }
   });
 
   it('retries with backoff on 5xx/429, then fails as MODEL_UNAVAILABLE without leaking the key', async () => {
@@ -132,6 +166,7 @@ describe('anthropicProposalModel', () => {
     expect(seen[0]!.headers.authorization).toBe('Bearer oa');
     expect(seen[0]!.body).toMatchObject({
       response_format: { type: 'json_object' },
+      max_tokens: MAX_OUTPUT_TOKENS,
       messages: [
         { role: 'system', content: 'sys' },
         { role: 'user', content: 'usr' },
@@ -149,7 +184,10 @@ describe('anthropicProposalModel', () => {
     expect(seen[1]!.headers['x-goog-api-key']).toBe('gm');
     expect(seen[1]!.body).toMatchObject({
       systemInstruction: { parts: [{ text: 'sys' }] },
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        maxOutputTokens: MAX_OUTPUT_TOKENS,
+      },
     });
   });
 

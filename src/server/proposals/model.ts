@@ -26,7 +26,11 @@ export const DEFAULT_MODELS: Record<ProposalProvider, string> = {
 export const ANTHROPIC_DEFAULT_MODEL = DEFAULT_MODELS.anthropic;
 
 const TIMEOUT_MS = 60_000;
-const MAX_OUTPUT_TOKENS = 4000;
+/**
+ * A cap, not spend. Gemini 3.x counts thinking tokens against maxOutputTokens and spends 3–4k
+ * of them on a 5k-token prompt, so 4,000 truncated the JSON for large inputs.
+ */
+export const MAX_OUTPUT_TOKENS = 16_000;
 /** Attempts per model on 429/5xx/network, with exponential backoff (1 s, 2 s, 4 s). */
 export const MAX_ATTEMPTS = 4;
 const BACKOFF_MS = 1000;
@@ -46,6 +50,8 @@ type Vendor = {
   headers: (apiKey: string) => Record<string, string>;
   body: (model: string, prompt: ProposalPrompt) => unknown;
   extractText: (body: unknown) => string;
+  /** True when the vendor reports the answer was cut off at the output token limit. */
+  truncated: (body: unknown) => boolean;
 };
 
 const isRetryable = (status: number) => status === 429 || status >= 500;
@@ -94,7 +100,16 @@ function vendorModel(
             response = undefined;
           }
           if (response?.ok) {
-            const text = vendor.extractText(await response.json());
+            const body = await response.json();
+            // Truncated JSON would otherwise surface as "did not return JSON"; a fallback model
+            // would hit the same ceiling, so fail here with an actionable message instead.
+            if (vendor.truncated(body))
+              throw graphError(
+                'VALIDATION_ERROR',
+                'Proposal model output was truncated at the output token limit; shorten or split the input text',
+                { provider, model, path: '$' },
+              );
+            const text = vendor.extractText(body);
             if (!text)
               throw graphError('MODEL_UNAVAILABLE', 'Proposal model returned no text', {
                 provider,
@@ -163,6 +178,7 @@ export function anthropicProposalModel(options: VendorOptions): ProposalModel {
           .filter((block) => block.type === 'text')
           .map((block) => block.text ?? '')
           .join(''),
+      truncated: (body) => (body as { stop_reason?: string }).stop_reason === 'max_tokens',
     },
     options,
   );
@@ -188,6 +204,9 @@ export function openAiProposalModel(options: VendorOptions): ProposalModel {
       extractText: (body) =>
         (body as { choices?: Array<{ message?: { content?: string | null } }> }).choices?.[0]
           ?.message?.content ?? '',
+      truncated: (body) =>
+        (body as { choices?: Array<{ finish_reason?: string }> }).choices?.[0]?.finish_reason ===
+        'length',
     },
     options,
   );
@@ -217,6 +236,9 @@ export function geminiProposalModel(options: VendorOptions): ProposalModel {
         )
           .map((part) => part.text ?? '')
           .join(''),
+      truncated: (body) =>
+        (body as { candidates?: Array<{ finishReason?: string }> }).candidates?.[0]
+          ?.finishReason === 'MAX_TOKENS',
     },
     options,
   );
