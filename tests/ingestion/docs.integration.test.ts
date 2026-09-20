@@ -68,6 +68,7 @@ describe('documentation ingestion on a scanned repository', () => {
             summary: '',
             importance: 5,
             confidence: 0.9,
+            evidence: 'All handlers must be idempotent',
           },
         ],
         edges: [{ fromKey: 'idempotent-handlers', toKey: 'file.src-index-ts', type: 'CONSTRAINS' }],
@@ -86,6 +87,12 @@ describe('documentation ingestion on a scanned repository', () => {
     const source = await store.getSource(projectId, readme.sourceId!);
     expect(source.kind).toBe('agent');
     expect(source.uri).toBe(`https://github.com/example/sample/blob/${result.commit}/README.md`);
+    const claimSource = await store.getSource(
+      projectId,
+      (await store.getNode(projectId, readme.created.nodes[0]!.nodeId)).current.sourceId,
+    );
+    expect(claimSource.uri).toBe(source.uri);
+    expect(claimSource.excerpt).toContain('Supporting quote: "All handlers must be idempotent"');
     expect(source.label).toContain('Documentation README.md @');
     const node = await store.getNode(projectId, readme.created.nodes[0]!.nodeId);
     expect(node.current.authority).toBe('inferred');

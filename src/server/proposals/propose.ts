@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import { GraphError, graphError } from '../context/errors';
 import type { EdgeType, GraphStore, NodeType } from '../context/types';
 import type { ProposalModel } from './model';
-import { buildProposalPrompt, normalizeKey, parseModelProposal, PROPOSAL_LIMITS } from './prompt';
+import {
+  buildProposalPrompt,
+  normalizeKey,
+  parseModelProposal,
+  PROPOSAL_LIMITS,
+  quoteAppearsIn,
+} from './prompt';
 
 export type { ProposalModel } from './model';
 
@@ -18,7 +24,14 @@ export type ProposalResult = {
   model: string;
   sourceId: string | null;
   created: {
-    nodes: Array<{ nodeId: string; externalKey: string; type: NodeType; title: string }>;
+    nodes: Array<{
+      nodeId: string;
+      externalKey: string;
+      type: NodeType;
+      title: string;
+      /** The verbatim input quote recorded as this node's evidence. */
+      evidence: string;
+    }>;
     edges: Array<{ edgeId: string; from: string; to: string; type: EdgeType }>;
   };
   dropped: Array<{ kind: 'node' | 'edge'; reason: string; ref: string }>;
@@ -125,6 +138,19 @@ export async function proposeContext(
         dropped.push({ kind: 'node', reason: 'already exists', ref: existingKey });
         continue;
       }
+      // Grounding: a claim whose supporting quote is not in the input is discarded, not stored.
+      if (!quoteAppearsIn(node.evidence, text)) {
+        dropped.push({ kind: 'node', reason: 'evidence quote not found in input', ref: node.key });
+        continue;
+      }
+      // One source per claim carrying the exact supporting quote; the batch source keeps the full input.
+      const nodeSource = await tx.createSource(projectId, {
+        kind: 'agent',
+        uri: source.uri,
+        label: `${source.label} — supporting quote`.slice(0, 200),
+        excerpt: `[${modelId}] Supporting quote: "${node.evidence}"\n\nFull input recorded in source ${source.id}.`,
+        revisionRef: null,
+      });
       const externalKey = `agent.${node.key}-${randomUUID().slice(0, 8)}`;
       const createdNode = await tx.createNode(projectId, {
         type: node.type,
@@ -135,7 +161,7 @@ export async function proposeContext(
         authority: 'inferred',
         importance: node.importance,
         confidence: Math.min(node.confidence, PROPOSAL_LIMITS.maxConfidence),
-        sourceId: source.id,
+        sourceId: nodeSource.id,
         actor,
         changeReason: request.taskHint
           ? `Proposed by agent after: ${request.taskHint}`.slice(0, 500)
@@ -147,6 +173,7 @@ export async function proposeContext(
         externalKey,
         type: node.type,
         title: node.title,
+        evidence: node.evidence,
       });
     }
     const seen = new Set<string>();

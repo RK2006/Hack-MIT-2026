@@ -52,7 +52,8 @@ proposal queues/UI, or embedding calls (the compiler embeds new nodes lazily).
 
 - [x] P1: `proposeContext(deps, projectId, { text, taskHint?, model? })` reads the current graph, builds a prompt listing existing node keys/titles/types, and calls a `ProposalModel` once.
 - [x] P2: Model output is parsed as strict JSON matching the schema below; malformed output is a `VALIDATION_ERROR` naming the offending path, never a partial write.
-- [x] P3: Each proposal becomes an inferred node with `externalKey = agent.<slug>-<8 hex>` (unique), `confidence ≤ 0.7`, `importance 1–5`, `actor { kind: 'agent', label: <model id> }`, and one shared `agent` source whose excerpt is the first 2,000 code points of the input text prefixed with the model id.
+- [x] P3: Each proposal becomes an inferred node with `externalKey = agent.<slug>-<8 hex>` (unique), `confidence ≤ 0.7`, `importance 1–5`, `actor { kind: 'agent', label: <model id> }`. One batch `agent` source records the input text (first 2,000 code points, prefixed with the model id); **each node additionally gets its own `agent` source** (same locator) whose excerpt is the node's supporting quote plus a pointer to the batch source, so reviewers see the sentence a claim came from rather than the whole input.
+- [x] P9 (grounding): every proposed node must include `evidence`, a verbatim quote (≤ 600 chars) from the input. Quotes are checked against the input ignoring whitespace runs and case; a node whose quote is not found is dropped with reason `evidence quote not found in input` (and its edges become unresolved), never written. This is the primary guard against hallucinated claims.
 - [x] P4: Relationships resolve `toKey`/`fromKey` against the existing external keys (or a newly proposed key); unresolved, duplicate, self, or archived-endpoint edges are dropped and reported, not fatal.
 - [x] P5: Bounds: input text 1–20,000 code points; ≤ 8 nodes and ≤ 12 edges per call; project node/edge limits still enforced by the store.
 - [x] P6: The write is one `store.transaction`; a store failure leaves no partial proposal.
@@ -94,6 +95,7 @@ type ModelProposal = {
     summary: string;           // 0–300
     importance: 1 | 2 | 3 | 4 | 5;
     confidence: number;        // 0–1, clamped to ≤ 0.7 on write
+    evidence: string;          // verbatim supporting quote from the input, 1–600 chars; verified
   }>;
   edges: Array<{
     fromKey: string;           // proposed key or existing externalKey
@@ -103,7 +105,7 @@ type ModelProposal = {
 };
 type ProposalResult = {
   projectId: string; model: string; sourceId: string;
-  created: { nodes: Array<{ nodeId: string; externalKey: string; type: NodeType; title: string }>;
+  created: { nodes: Array<{ nodeId: string; externalKey: string; type: NodeType; title: string; evidence: string }>;
              edges: Array<{ edgeId: string; from: string; to: string; type: EdgeType }> };
   dropped: Array<{ kind: 'node' | 'edge'; reason: string; ref: string }>;
 };
@@ -274,3 +276,9 @@ Also observed during the runs: `gemini-3.8-flash` returned 429 "exceeded your
 current quota" and 503 "high demand" for this key and fell through to the next
 model as designed; the non-thinking `gemini-3.1-flash-lite` needed no thinking
 tokens and answered the large document in 810 output tokens.
+
+Grounded evidence (2026-09-20): reviewers saw identical evidence on every node of a
+batch because one source covered the whole input. Nodes now carry a verified
+verbatim quote and their own source; a live run of a three-sentence note produced
+two claims with exact supporting sentences and ignored the irrelevant sentence,
+and the integration suite shows a fabricated quote being dropped with no write.
