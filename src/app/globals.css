@@ -1599,18 +1599,30 @@ table.archived td:first-child {
   color: var(--text);
   animation: cover-rise 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
+.cover-punch {
+  margin: 22px 0 0;
+  max-width: 30ch;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 1.7vw, 23px);
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-wrap: balance;
+  animation: cover-rise 900ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
 .cover-line {
-  margin: 20px 0 0;
-  max-width: 34ch;
-  font-size: 17px;
+  margin: 10px 0 0;
+  max-width: 40ch;
+  font-size: 16px;
   font-style: italic;
   line-height: 1.5;
   color: var(--text-secondary);
   text-wrap: balance;
-  animation: cover-rise 900ms 120ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation: cover-rise 900ms 200ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
 }
 .cover-begin {
-  margin-top: 36px;
+  margin-top: 32px;
   min-height: 44px;
   padding: 0 18px 0 20px;
   display: inline-flex;
@@ -1648,16 +1660,6 @@ table.archived td:first-child {
 .cover-begin-arrow {
   display: inline-block;
   transition: transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
-}
-.cover-foot {
-  position: absolute;
-  right: 32px;
-  bottom: 24px;
-  margin: 0;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-  animation: cover-fade 1200ms 600ms ease both;
 }
 @keyframes cover-rise {
   from {
@@ -1852,9 +1854,6 @@ table.archived td:first-child {
     max-width: 100%;
     height: auto;
     aspect-ratio: 640 / 400;
-  }
-  .cover-foot {
-    display: none;
   }
 }
 

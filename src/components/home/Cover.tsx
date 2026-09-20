@@ -36,8 +36,9 @@ export default function Cover() {
       <div className="cover-inner">
         <div className="cover-word">
           <h1 className="cover-title">Handoff</h1>
+          <p className="cover-punch">Stop pasting your whole codebase into the prompt.</p>
           <p className="cover-line">
-            Project knowledge as a graph. The task decides which part of it an agent gets.
+            Handoff gives the agent only the part of your project&apos;s knowledge the task needs.
           </p>
           <button
             ref={beginRef}
@@ -54,9 +55,6 @@ export default function Cover() {
         </div>
         <HandoffSketch />
       </div>
-      <p className="cover-foot mono" aria-hidden="true">
-        canonical · inferred · provenance · budget
-      </p>
     </div>
   );
 }
