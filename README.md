@@ -212,7 +212,7 @@ synthetic data; they do not reset or delete existing projects.
 
 ## Layout
 
-- `docs/` — project spec, MVP plan, and feature specs (source of truth)
+- `docs/` — project spec, MVP plan, feature specs (source of truth), and `DEMO_RUNBOOK.md`
 - `src/server/context/` — graph store, validation, and the compiler (`compiler/`)
 - `src/server/ingestion/` — prepared manifest import; `fixtures/demo-payments.json`
 - `src/server/workbench/` + `src/app/api/` — HTTP handlers and routes
