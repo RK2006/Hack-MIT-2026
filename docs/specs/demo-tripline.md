@@ -338,11 +338,13 @@ demo database follows the README's guidance (private connection string,
       semantic seed or a `graph_neighbor` at path length ≤ 2 from one. (Passes on
       the stand-in; the constraint is itself a seed, and `timezone.ts`,
       `reminders.ts`, and the soft-delete constraint arrive as graph neighbours.)
-- [ ] A5: With the A3 bundle prepended, a coding agent (Claude Code or Codex)
-      edits `src/notifications/reminders.ts` to use `stop.timezone` via
-      `itinerary/timezone.ts`, and un-skipping the T5 test passes. Without the
-      bundle, in ≥ 2 of 3 rehearsal runs the agent does something else (uses
-      `trip.homeTimezone`, asks a question, or edits elsewhere). Outcomes recorded.
+- [x] A5 (with-context half): Codex, calling `compile_context` over MCP for the
+      primary task at 2,048 tokens, edited `src/notifications/reminders.ts` to use
+      `stop.timezone` via `itinerary/timezone.ts`, un-skipped the Tokyo test, and
+      `npm test` passed (operator run, 2026-09-20). The without-context contrast
+      (≥ 2 of 3 naive runs doing something else) was **not** rehearsed for lack of
+      time; the demo therefore shows the agent with context and does not claim a
+      before/after.
 - [ ] A6: `hof ingest pr <fix PR>` (with a live key) creates ≥ 1 inferred proposal
       whose evidence URI is the PR; `hof accept` produces v2 with operator
       attribution; `hof diff <ref> 1 2` shows the change; a subsequent
