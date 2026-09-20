@@ -10,6 +10,24 @@ export const GRAPH_ZOOM_STEP = 0.2;
 export const GRAPH_ZOOM_DEFAULT = 1.4;
 export const GRAPH_RECIPROCAL_CURVE = 56;
 export const GRAPH_PARALLEL_CURVE_GAP = 36;
+export const GRAPH_BASE_WIDTH = 1400;
+export const GRAPH_BASE_HEIGHT = 900;
+/** Node count the base canvas comfortably separates at GRAPH_NODE_MIN_DISTANCE. */
+const GRAPH_BASE_CAPACITY = 30;
+
+/**
+ * Canvas dimensions for a graph of `nodeCount` nodes. The base 1400×900 canvas has room for
+ * roughly 75 nodes at the minimum spacing; beyond ~40 the layout gets crowded and beyond
+ * capacity the separation pass can only clamp nodes onto the border. Scaling the area with
+ * the node count keeps the same aspect ratio and per-node room regardless of project size.
+ */
+export function graphCanvasSize(nodeCount: number): { width: number; height: number } {
+  const scale = Math.sqrt(Math.max(1, nodeCount / GRAPH_BASE_CAPACITY));
+  return {
+    width: Math.round(GRAPH_BASE_WIDTH * scale),
+    height: Math.round(GRAPH_BASE_HEIGHT * scale),
+  };
+}
 
 export type GraphEdgeGeometry = {
   start: Point;
@@ -64,8 +82,13 @@ export function layoutGraph(
     const b = index.get(edge.toNodeId);
     if (a !== undefined && b !== undefined && a !== b) links.push([a, b]);
   }
+  // Summation order changes the floating-point result, so fix it independent of input order.
+  links.sort(([a1, b1], [a2, b2]) => a1 - a2 || b1 - b2);
   const area = innerW * innerH;
   const k = Math.sqrt(area / n) * 1.05;
+  // Without a cutoff, the summed repulsion from a large graph outweighs the centre pull and
+  // pins most nodes to the border. Only nearby nodes repel, as in grid-variant FR.
+  const repulsionRadius = 2 * k;
   const dx = new Float64Array(n);
   const dy = new Float64Array(n);
   let temperature = Math.max(innerW, innerH) / 10;
@@ -84,6 +107,7 @@ export function layoutGraph(
           vy = 0.01;
           dist = Math.hypot(vx, vy);
         }
+        if (dist > repulsionRadius) continue;
         const force = (k * k) / dist;
         const fx = (vx / dist) * force;
         const fy = (vy / dist) * force;
@@ -139,6 +163,8 @@ function separateNodes(
   height: number,
   margin: number,
 ) {
+  const clampX = (x: number) => Math.min(width - margin, Math.max(margin, x));
+  const clampY = (y: number) => Math.min(height - margin, Math.max(margin, y));
   for (let pass = 0; pass < 2_000; pass += 1) {
     let moved = false;
     for (let i = 0; i < xs.length; i += 1) {
@@ -146,20 +172,39 @@ function separateNodes(
         let vx = xs[j]! - xs[i]!;
         let vy = ys[j]! - ys[i]!;
         let distance = Math.hypot(vx, vy);
-        if (distance >= GRAPH_NODE_MIN_DISTANCE) continue;
-        if (distance < 0.01) {
-          vx = (i + j) % 2 === 0 ? 1 : -1;
-          vy = 1;
-          distance = Math.SQRT2;
+        if (distance < GRAPH_NODE_MIN_DISTANCE) {
+          if (distance < 0.01) {
+            vx = (i + j) % 2 === 0 ? 1 : -1;
+            vy = 1;
+            distance = Math.SQRT2;
+          }
+          moved = true;
+          const push = (GRAPH_NODE_MIN_DISTANCE - distance) / 2 + 0.2;
+          const ux = vx / distance;
+          const uy = vy / distance;
+          xs[i] = clampX(xs[i]! - ux * push);
+          xs[j] = clampX(xs[j]! + ux * push);
+          ys[i] = clampY(ys[i]! - uy * push);
+          ys[j] = clampY(ys[j]! + uy * push);
+          continue;
         }
+        // Circles are clear but the label boxes beneath them (wide, short) still collide:
+        // slide apart along whichever axis needs the smaller move.
+        const ax = Math.abs(vx);
+        const ay = Math.abs(vy);
+        if (ax >= GRAPH_LABEL_WIDTH || ay >= GRAPH_LABEL_MAX_HEIGHT) continue;
         moved = true;
-        const push = (GRAPH_NODE_MIN_DISTANCE - distance) / 2 + 0.2;
-        const ux = vx / distance;
-        const uy = vy / distance;
-        xs[i] = Math.min(width - margin, Math.max(margin, xs[i]! - ux * push));
-        xs[j] = Math.min(width - margin, Math.max(margin, xs[j]! + ux * push));
-        ys[i] = Math.min(height - margin, Math.max(margin, ys[i]! - uy * push));
-        ys[j] = Math.min(height - margin, Math.max(margin, ys[j]! + uy * push));
+        const needX = (GRAPH_LABEL_WIDTH - ax) / 2 + 0.2;
+        const needY = (GRAPH_LABEL_MAX_HEIGHT - ay) / 2 + 0.2;
+        if (needY <= needX) {
+          const dir = vy >= 0 ? 1 : -1;
+          ys[i] = clampY(ys[i]! - dir * needY);
+          ys[j] = clampY(ys[j]! + dir * needY);
+        } else {
+          const dir = vx >= 0 ? 1 : -1;
+          xs[i] = clampX(xs[i]! - dir * needX);
+          xs[j] = clampX(xs[j]! + dir * needX);
+        }
       }
     }
     if (!moved) break;

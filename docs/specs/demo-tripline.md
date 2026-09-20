@@ -347,8 +347,13 @@ demo database follows the README's guidance (private connection string,
       whose evidence URI is the PR; `hof accept` produces v2 with operator
       attribution; `hof diff <ref> 1 2` shows the change; a subsequent
       `hof checkout` cites version 2. Fallback via `hof edit` documented and tested.
-- [ ] A7: The workbench renders the Tripline graph and highlights the A3 selection
+- [x] A7: The workbench renders the Tripline graph and highlights the A3 selection
       legibly at the demo viewport; node titles are readable without zooming.
+      (Operator check 2026-09-20 on 88 nodes after the layout fix below: "looks
+      good". The first attempt failed — nodes piled along the top and left
+      borders with labels overlapping — because `GraphView` laid every graph out
+      on a fixed 1400×900 canvas and the force layout wall-hugged at that size;
+      fixed in `src/lib/layout.ts`, recorded under graph-workbench.md §18.)
 - [ ] A8: Full five-beat run rehearsed end-to-end in ≤ 6 minutes, twice, on the
       demo machine, with the rebuild (A1) performed first.
 

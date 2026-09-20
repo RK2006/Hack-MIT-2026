@@ -463,9 +463,19 @@ Findings from the read/edit/history slice:
   by sorted node IDs; node/edge order does not change positions. Edges touching an
   archived node are not returned by `getGraph`, so an archived node's detail shows no
   relationships until it is restored.
-- Graph nodes are SVG circles with separate two-line bounded labels on a 1,400×900
-  logical canvas. The force pass uses circular collision spacing rather than a dense
-  grid fallback, preserving an organic network shape. Pointer dragging updates only
+- Graph nodes are SVG circles with separate two-line bounded labels on a logical
+  canvas that starts at 1,400×900 and grows with the square root of the node count
+  above 30 (`graphCanvasSize`), keeping per-node room constant: 88 nodes → ≈2,400×1,540.
+  The force pass uses circular collision spacing rather than a dense grid fallback,
+  preserving an organic network shape.
+  Found while preparing the Tripline demo (88 nodes): on the fixed canvas the
+  separation pass had no room and clamped most nodes onto the border, and even on a
+  larger canvas the summed repulsion of a big graph overwhelmed the centre pull and
+  wall-hugged 70 of 90 nodes. Repulsion is therefore cut off at 2·k (grid-variant
+  Fruchterman–Reingold), links are summed in sorted order so floating-point results
+  stay input-order independent, and separation also resolves 124×34 label-box
+  collisions that circle spacing alone permits on the diagonal. A 90-node
+  Tripline-shaped layout test pins zero circle/label overlaps and < 25 % border nodes. Pointer dragging updates only
   React layout state and incident edge geometry; reset/reload/graph mutation restores
   deterministic positions. Scrollable zoom defaults to 140% for label readability,
   is transient, and is clamped from 60% to 200%. Background pointer dragging changes

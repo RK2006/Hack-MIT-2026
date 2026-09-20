@@ -5,6 +5,7 @@ import {
   clampGraphZoom,
   dragPanOffset,
   graphEdgeCurveOffsets,
+  graphCanvasSize,
   graphEdgeGeometry,
   graphLabelsOverlap,
   GRAPH_NODE_MIN_DISTANCE,
@@ -102,6 +103,48 @@ describe('layoutGraph', () => {
     expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(650);
     expect(new Set(xs).size).toBeGreaterThan(10);
     expect(new Set(ys).size).toBeGreaterThan(10);
+  });
+
+  it('grows the canvas so a scanned repository (~90 nodes) stays separated with readable labels', () => {
+    // Shaped like the Tripline demo: 13 directory components each containing a handful of files,
+    // plus claims attached to a few of them.
+    const big: Array<{ id: string }> = [];
+    const bigEdges: Array<{ fromNodeId: string; toNodeId: string }> = [];
+    for (let c = 0; c < 13; c += 1) {
+      big.push({ id: `component-${c}` });
+      bigEdges.push({ fromNodeId: 'component-0', toNodeId: `component-${c}` });
+      for (let f = 0; f < 5; f += 1) {
+        big.push({ id: `file-${c}-${f}` });
+        bigEdges.push({ fromNodeId: `component-${c}`, toNodeId: `file-${c}-${f}` });
+      }
+    }
+    for (let k = 0; k < 12; k += 1) {
+      big.push({ id: `claim-${k}` });
+      bigEdges.push({ fromNodeId: `claim-${k}`, toNodeId: `component-${k % 13}` });
+    }
+    expect(big.length).toBeGreaterThanOrEqual(88);
+    const { width, height } = graphCanvasSize(big.length);
+    expect(width).toBeGreaterThan(WIDTH);
+    expect(graphCanvasSize(29)).toEqual({ width: WIDTH, height: HEIGHT });
+    const positions = [...layoutGraph(big, bigEdges, width, height).values()];
+    let onEdge = 0;
+    for (const { x, y } of positions) {
+      if (
+        x <= GRAPH_NODE_MIN_DISTANCE / 2 ||
+        y <= GRAPH_NODE_MIN_DISTANCE / 2 ||
+        x >= width - GRAPH_NODE_MIN_DISTANCE / 2 ||
+        y >= height - GRAPH_NODE_MIN_DISTANCE / 2
+      )
+        onEdge += 1;
+    }
+    for (let i = 0; i < positions.length; i += 1) {
+      for (let j = i + 1; j < positions.length; j += 1) {
+        expect(nodesOverlap(positions[i]!, positions[j]!)).toBe(false);
+        expect(graphLabelsOverlap(positions[i]!, positions[j]!)).toBe(false);
+      }
+    }
+    // The failure mode this guards against: nodes piled along the canvas border.
+    expect(onEdge).toBeLessThan(positions.length / 4);
   });
 
   it('handles empty and single-node graphs', () => {

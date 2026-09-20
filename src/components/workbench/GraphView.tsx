@@ -14,6 +14,7 @@ import {
   GRAPH_ZOOM_MIN,
   GRAPH_ZOOM_STEP,
   GRAPH_ZOOM_DEFAULT,
+  graphCanvasSize,
   layoutGraph,
   wrapGraphTitle,
   type Point,
@@ -21,8 +22,6 @@ import {
 import { NODE_TYPES, type ContextEdge, type ContextNode } from '@/server/context/types';
 import { NODE_COLORS } from './shared';
 
-const WIDTH = 1400;
-const HEIGHT = 900;
 const DRAG_THRESHOLD = 4;
 
 type Props = {
@@ -53,7 +52,11 @@ export default function GraphView({
         .join(',')}`,
     [nodes, edges],
   );
-  const defaultPositions = useMemo(() => layoutGraph(nodes, edges, WIDTH, HEIGHT), [nodes, edges]);
+  const { width: WIDTH, height: HEIGHT } = graphCanvasSize(nodes.length);
+  const defaultPositions = useMemo(
+    () => layoutGraph(nodes, edges, WIDTH, HEIGHT),
+    [nodes, edges, WIDTH, HEIGHT],
+  );
   const edgeCurveOffsets = useMemo(() => graphEdgeCurveOffsets(edges), [edges]);
   const [layoutState, setLayoutState] = useState<{
     key: string;
