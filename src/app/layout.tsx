@@ -21,8 +21,8 @@ const mono = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: 'Context Graph Workbench',
-  description: 'Inspect, review, and compile task-relevant project context.',
+  title: 'Handoff',
+  description: 'Project knowledge as a graph; the task decides which part an agent gets.',
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
