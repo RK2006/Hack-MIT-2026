@@ -14,10 +14,15 @@ export default async function ProjectsPage() {
   }
   return (
     <main className="home">
-      <Link href="/" className="home-back">
-        ← Handoff
-      </Link>
-      <h1>Projects</h1>
+      <header className="home-brand">
+        <Link href="/" className="home-wordmark" title="Back to the cover">
+          Handoff
+        </Link>
+        <span className="home-brand-sep" aria-hidden="true">
+          /
+        </span>
+        <h1>Projects</h1>
+      </header>
       <p className="muted">
         Pick a project to inspect its graph, review proposals, and compile task context.
       </p>
