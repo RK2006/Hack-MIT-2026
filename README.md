@@ -22,8 +22,10 @@ npm run import:demo        # imports the synthetic payments project once (repeat
 npm run dev                # workbench on http://127.0.0.1:3000 (loopback only)
 ```
 
-The Compose password is for loopback-only local development. Copy `.env.example`
-for other environments and never commit real credentials.
+All configuration lives in a git-ignored `.env` at the repo root (copy
+`.env.example`); every `npm run …` script and the Next.js dev server load it.
+Shell variables take precedence over `.env`, so `unset` a stale key exported in
+your shell profile if it is not the one you want. Never commit real credentials.
 
 Embeddings default to a local sentence-transformer (`EMBEDDING_PROVIDER=local`,
 `Xenova/all-MiniLM-L6-v2` via ONNX, no network after the first model download).
@@ -43,6 +45,46 @@ To use OpenAI instead, set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY`
 4. Edit the inferred assumption "An in-memory seen-event set might be sufficient",
    review it as canonical, then open History and compare v1 with v2.
 5. Recompile: the bundle now cites v2 (canonical); v1 remains readable in History.
+
+## Agent handoff (MCP)
+
+Expose the compiler to a coding agent over stdio MCP:
+
+```bash
+npm run mcp     # tools: list_projects, compile_context, get_node, get_source (+ propose_context with ANTHROPIC_API_KEY)
+```
+
+Client configuration (Claude Code / Codex style):
+
+```json
+{
+  "mcpServers": {
+    "context-graph": {
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp-server.ts"],
+      "cwd": "/path/to/hackmit-2026",
+      "env": {
+        "DATABASE_URL": "postgresql://context_graph:context_graph_local@127.0.0.1:5432/context_graph"
+      }
+    }
+  }
+}
+```
+
+## Agent proposals
+
+With an LLM key in `.env` (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`;
+optional `PROPOSAL_PROVIDER=anthropic|openai|gemini` and `PROPOSAL_MODEL`; defaults
+`claude-sonnet-4-5` / `gpt-4.1-mini` / `gemini-flash-latest,gemini-flash-lite-latest`; `PROPOSAL_MODEL` accepts a
+comma-separated fallback list, tried in order when a model is throttled), an agent or operator can turn
+notes/diff summaries into _inferred_ knowledge for review:
+
+```bash
+npm run propose -- 7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101 notes.md --task "Fix duplicate Stripe webhook processing"
+```
+
+Proposals appear in the workbench with the inferred badge and agent evidence; review them
+canonical or archive them. Agents can never write canonical knowledge.
 
 ## Verification
 
