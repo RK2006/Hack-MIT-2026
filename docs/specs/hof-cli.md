@@ -404,7 +404,9 @@ Findings from slice two:
 - Clipboard support probes `pbcopy`, `wl-copy`, then `xclip`; failure is a warning, not
   an error, because the text is already on stdout.
 - `OPERATOR_LABEL` is read per call (`operatorActor(env)`) rather than at import, so
-  tests and long-lived processes see environment changes; it is bounded to the store's
-  120-character actor label limit.
+  tests and long-lived processes see environment changes. A label longer than the
+  store's 120-character actor limit falls back to `local-operator` rather than being
+  truncated (implemented and tested on `main` in `tests/workbench/http.test.ts`; the
+  parallel CLI-branch implementation was dropped in favor of it).
 - `bin/hof` resolves the repository from its own path, so it works from any cwd and
   survives `PATH` entries that point at symlinks.

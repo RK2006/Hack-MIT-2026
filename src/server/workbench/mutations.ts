@@ -12,17 +12,20 @@ import {
   type GraphStore,
 } from '../context/types';
 
+/** Every workbench write is attributed to the local human operator; payloads cannot choose it. */
 export const DEFAULT_OPERATOR_LABEL = 'local-operator';
 
 /**
- * Every workbench/CLI write is attributed to the human operator running the process; payloads
- * cannot choose it. On a shared database, OPERATOR_LABEL distinguishes teammates. The label is
- * attribution, not authentication.
+ * Human writes are attributed to the operator running this process. OPERATOR_LABEL lets teammates
+ * sharing one database show up as themselves in provenance; it is attribution, not authentication.
  */
 export function operatorActor(env: Record<string, string | undefined> = process.env): Actor {
-  const label = env.OPERATOR_LABEL?.trim().slice(0, 120);
-  return { kind: 'human', label: label || DEFAULT_OPERATOR_LABEL };
+  const label = env.OPERATOR_LABEL?.trim();
+  return { kind: 'human', label: label && label.length <= 120 ? label : DEFAULT_OPERATOR_LABEL };
 }
+
+/** @deprecated use operatorActor(); kept for existing imports. */
+export const OPERATOR_ACTOR: Actor = operatorActor();
 
 const operatorEvidence = {
   evidenceNote: z.string().min(1).max(20_000),

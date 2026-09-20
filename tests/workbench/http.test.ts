@@ -58,3 +58,15 @@ describe('errorResponse', () => {
     expect(JSON.stringify(await response.json())).not.toContain('secret');
   });
 });
+
+describe('operatorActor', () => {
+  it('defaults to local-operator and honors OPERATOR_LABEL', async () => {
+    const { operatorActor } = await import('../../src/server/workbench/mutations');
+    expect(operatorActor({})).toEqual({ kind: 'human', label: 'local-operator' });
+    expect(operatorActor({ OPERATOR_LABEL: '  anmol ' })).toEqual({
+      kind: 'human',
+      label: 'anmol',
+    });
+    expect(operatorActor({ OPERATOR_LABEL: 'x'.repeat(121) }).label).toBe('local-operator');
+  });
+});
