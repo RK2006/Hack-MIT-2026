@@ -21,7 +21,9 @@
     "import:demo": "tsx scripts/import-demo.ts",
     "semantic:smoke": "tsx scripts/semantic-smoke.ts",
     "mcp": "tsx scripts/mcp-server.ts",
-    "propose": "tsx scripts/propose.ts"
+    "propose": "tsx scripts/propose.ts",
+    "ingest:pr": "tsx scripts/ingest-pr.ts",
+    "import:manifest": "tsx scripts/import-manifest.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

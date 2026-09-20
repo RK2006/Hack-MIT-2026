@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { compileContext, type CompilerDeps } from '../context/compiler/compile';
 import { REQUEST_LIMITS } from '../context/compiler/types';
 import { GraphError } from '../context/errors';
+import { ingestPullRequest } from '../ingestion/github-pr';
 import { proposeContext, type ProposalModel } from '../proposals/propose';
 
 export type McpDeps = CompilerDeps & {
@@ -166,6 +167,39 @@ export function createContextGraphMcpServer(deps: McpDeps): McpServer {
               projectId,
               request,
             )) as unknown as Record<string, unknown>,
+          ),
+        ),
+    );
+
+    server.registerTool(
+      'ingest_pull_request',
+      {
+        title: 'Ingest a GitHub pull request as proposed knowledge',
+        description:
+          "Fetch a GitHub pull request with the operator's gh CLI and extract durable knowledge (decisions, constraints, discoveries, bugs) from its description, commits, files, and diff. " +
+          'Results are inferred nodes citing the PR URL as evidence, for a human to review; nothing becomes canonical automatically.',
+        inputSchema: z.object({
+          projectId: uuid,
+          ref: z
+            .string()
+            .min(1)
+            .max(300)
+            .describe(
+              'PR URL (https://github.com/owner/repo/pull/123), owner/repo#123, or a number with repo',
+            ),
+          repo: z
+            .string()
+            .max(200)
+            .optional()
+            .describe('owner/name, required when ref is a bare number'),
+        }),
+      },
+      async ({ projectId, ref, repo }) =>
+        run('ingest_pull_request', async () =>
+          ok(
+            (await ingestPullRequest({ store: deps.store, model }, projectId, ref, {
+              repo,
+            })) as unknown as Record<string, unknown>,
           ),
         ),
     );

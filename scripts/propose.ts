@@ -10,7 +10,9 @@ import { proposeContext } from '../src/server/proposals/propose';
 const args = process.argv.slice(2);
 const taskIndex = args.indexOf('--task');
 const taskHint = taskIndex >= 0 ? args[taskIndex + 1] : undefined;
-const positional = args.filter((arg, index) => arg !== '--task' && index !== taskIndex + 1);
+const positional = args.filter(
+  (arg, index) => arg !== '--task' && (taskIndex < 0 || index !== taskIndex + 1),
+);
 const [projectId, file] = positional;
 if (!projectId) {
   console.error('Usage: npm run propose -- <projectId> [notes-file] [--task "hint"]');

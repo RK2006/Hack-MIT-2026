@@ -6,6 +6,7 @@ export type GraphErrorCode =
   | 'LIMIT_EXCEEDED'
   | 'EMBEDDING_UNAVAILABLE'
   | 'MODEL_UNAVAILABLE'
+  | 'SOURCE_UNAVAILABLE'
   | 'STORAGE_ERROR';
 
 export class GraphError extends Error {
