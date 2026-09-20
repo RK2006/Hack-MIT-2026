@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "context-graph": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["tsx", "scripts/mcp-server.ts"],
+      "env": {}
+    }
+  }
+}

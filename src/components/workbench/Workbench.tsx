@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, errorMessage } from '@/lib/api';
+import { pendingReview } from '@/lib/review';
 import type { ContextNode, GraphSnapshot } from '@/server/context/types';
 import ArchivedList from './ArchivedList';
 import GraphView from './GraphView';
@@ -10,9 +11,10 @@ import HistoryPanel from './HistoryPanel';
 import NodeDetail, { type NodeAction } from './NodeDetail';
 import NodeForm, { type FormMode } from './NodeForm';
 import NodeList from './NodeList';
-import TaskPanel, { type TaskSummary } from './TaskPanel';
+import PendingReviewList from './PendingReviewList';
+import TaskPanel from './TaskPanel';
 
-type View = 'graph' | 'list' | 'archived';
+type View = 'graph' | 'list' | 'review' | 'archived';
 type Panel = { kind: 'detail' } | { kind: 'history' } | { kind: 'form'; mode: FormMode };
 type InspectorTab = 'node' | 'task';
 
@@ -102,6 +104,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
     () => new Map((graph?.nodes ?? []).map((node) => [node.id, node] as const)),
     [graph],
   );
+  const pending = useMemo(() => pendingReview(graph?.nodes ?? []), [graph]);
 
   const selectNode = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId);
@@ -132,7 +135,7 @@ export default function Workbench({ projectId }: { projectId: string }) {
         <Link href="/">← Projects</Link>
         <h1>{graph?.project.name ?? 'Loading project…'}</h1>
         <nav className="tabs" aria-label="View">
-          {(['graph', 'list', 'archived'] as View[]).map((option) => (
+          {(['graph', 'list', 'review', 'archived'] as View[]).map((option) => (
             <button
               key={option}
               type="button"
@@ -140,7 +143,13 @@ export default function Workbench({ projectId }: { projectId: string }) {
               aria-pressed={view === option}
               onClick={() => setView(option)}
             >
-              {option === 'graph' ? 'Graph' : option === 'list' ? 'List' : 'Archived'}
+              {option === 'graph'
+                ? 'Graph'
+                : option === 'list'
+                  ? 'List'
+                  : option === 'review'
+                    ? `Review${pending.length > 0 ? ` (${pending.length})` : ''}`
+                    : 'Archived'}
             </button>
           ))}
         </nav>
@@ -196,6 +205,22 @@ export default function Workbench({ projectId }: { projectId: string }) {
               selectedNodeId={selectedNodeId}
               highlightedNodeIds={highlightedNodeIds}
               onSelect={selectNode}
+            />
+          ) : null}
+          {graph && view === 'review' ? (
+            <PendingReviewList
+              projectId={projectId}
+              nodes={pending}
+              selectedNodeId={selectedNodeId}
+              onSelect={selectNode}
+              onOpenForm={(node, mode) => {
+                setSelectedNodeId(node.id);
+                setPanel({ kind: 'form', mode: { kind: mode, node } });
+              }}
+              onChanged={(nodeId) => {
+                setGraphVersion((v) => v + 1);
+                setSelectedNodeId(nodeId);
+              }}
             />
           ) : null}
           {view === 'archived' ? (

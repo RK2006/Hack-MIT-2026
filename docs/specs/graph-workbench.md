@@ -66,7 +66,17 @@ GitHub controls, MCP, or generating code with an LLM inside this application.
 5. "History" lists revisions; choosing two shows a field-by-field comparison and
    each revision's source. Comparison never writes.
 6. "Archived" tab lists archived nodes for detail/history/restore.
-7. Task context tab: task text, token budget (256–8,192, default 4,096), depth (0–3),
+6a. "Review (n)" tab is the human-in-the-loop queue for agent proposals: every
+   active node whose current revision is `inferred` and authored by an `agent`
+   actor (no human has touched it yet), newest first. Each row shows title,
+   type, proposer, confidence, summary/content, and on-demand evidence, with
+   **Accept as canonical** (revise: authority → canonical, confidence → 1),
+   **Edit & accept** (opens the review form), and **Reject (archive)**. One-click
+   decisions record a fresh manual source whose note is a fixed sentence plus an
+   optional operator note typed once at the top of the queue; the agent's
+   original revision and evidence remain in history. A human revision that keeps
+   a node inferred also removes it from the queue (the actor is now human).
+7. Task panel: task text, token budget (256–8,192, default 4,096), depth (0–3),
    optional start = selected node, "Allow degraded" checkbox off by default,
    Compile. Depth, start-node behavior, and degraded fallback are grouped under
    progressive Advanced options. The tab shows a compact selected-node/token summary
@@ -100,6 +110,9 @@ draft untouched; saving again is a deliberate overwrite of the newer revision.
       show counted tokens/omissions/degraded status, and copy context text exactly.
 - [x] W7: Preserve editable user input on failures; avoid displaying a previous
       successful bundle as if it belonged to a failed or still-running request.
+- [x] W8: Provide a review queue of agent-authored inferred nodes with one-click
+      accept/reject that writes ordinary human revisions through the existing
+      revise route; the tab label shows the pending count.
 - [~] W8: Keep active graph nodes and their title text visually distinct at the
       default layout, allow pointer dragging without accidental selection, and
       provide background drag-to-pan, deterministic reset, and bounded zoom controls.
@@ -279,6 +292,7 @@ selection reasons. No source text or secrets in request logs.
 ### Unit tests
 
 - A3: `tests/workbench/compare.test.ts` — snapshot comparison across every field.
+- W8: `tests/workbench/review.test.ts` — queue membership and ordering (`src/lib/review.ts`).
 - A1: `tests/workbench/layout.test.ts` — deterministic layout and safe-link rule.
 - A6: `tests/workbench/layout.test.ts` — circular collision spacing, bounds,
   deterministic reset coordinates, title wrapping/truncation, circle-edge
@@ -452,6 +466,17 @@ Findings from the read/edit/history slice:
   entire node as a database-style definition list.
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph
   snapshot so archived nodes open in the same detail/history/restore path.
+
+Findings from the review queue (W8):
+
+- "Pending review" is derived, not stored: `inferred && actor.kind === 'agent'`
+  on the current revision. No schema or route changes; the queue is a filter
+  over the graph snapshot the page already loads, and decisions reuse
+  `POST .../revisions`. Accept sets confidence to 1 because a human is now
+  vouching for the claim; Reject is an archive, so the proposal stays readable.
+- The fixture's own agent-sourced claims (e.g. the repeated-delivery bug) appear
+  in the queue on a fresh import — correct, since no human has reviewed them, and
+  useful for the demo before any live proposal exists.
 
 Findings from the task-panel integration:
 
