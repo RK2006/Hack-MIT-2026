@@ -141,6 +141,14 @@ Slice two:
       and CLI write uses actor `{ kind: 'human', label: OPERATOR_LABEL }` where
       `OPERATOR_LABEL` comes from the environment (1–120 characters) and defaults to
       `local-operator`. Labels are attribution, not authentication (project spec §9).
+- [x] C16: `scan <path> [--name] [--depth N] [--max-files N] [--include <prefix>]…
+      [--files source|all] [--out file.json] [--docs]` runs `scanRepository` (see
+      [repository scan](repository-scan.md)). Default: import the manifest and bind
+      the current directory to the new project, printing counts. `--out` writes the
+      manifest and does not import or bind. `--docs` additionally runs
+      `ingestDocumentation` (needs a proposal model; without one it is a warning, not
+      a failure). Re-scanning an already imported repository is the importer's
+      `CONFLICT`, exit 1.
 - [x] C15: `bin/hof` is a POSIX shell wrapper that runs `scripts/hof.js` with `node`
       from the repository, so teammates can `export PATH="<repo>/bin:$PATH"` instead of
       `npm link` when their global npm prefix is not writable.
@@ -408,5 +416,10 @@ Findings from slice two:
   store's 120-character actor limit falls back to `local-operator` rather than being
   truncated (implemented and tested on `main` in `tests/workbench/http.test.ts`; the
   parallel CLI-branch implementation was dropped in favor of it).
+- `hof scan` wraps `scanRepository` + `importPreparedProject` + `writeProjectBinding`;
+  the manifest is built in memory and only written when `--out` is given. The
+  scanner reads `git ls-files`, so it must not be run against a checkout with an
+  unresolved merge (conflicted paths are listed once per stage and become a
+  `Duplicate file path` validation error).
 - `bin/hof` resolves the repository from its own path, so it works from any cwd and
   survives `PATH` entries that point at symlinks.

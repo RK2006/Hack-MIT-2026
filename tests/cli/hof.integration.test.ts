@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -272,6 +272,63 @@ describe('hof authoring', () => {
       (await hof(['log', 'decision.async-retries', '--json'])).json<{ revisions: unknown[] }>()
         .revisions,
     ).toHaveLength(4);
+  });
+});
+
+describe('hof scan', () => {
+  const repo = new URL('../..', import.meta.url).pathname;
+
+  it('writes a manifest with --out without importing or binding', async () => {
+    const out = join(cwd, 'scan.json');
+    const before = (await hof(['projects', '--json'])).json<{ projects: unknown[] }>().projects;
+    const result = await hof([
+      'scan',
+      repo,
+      '--out',
+      out,
+      '--include',
+      'src/cli',
+      '--files',
+      'all',
+    ]);
+    expect(result.code).toBe(EXIT.ok);
+    expect(result.out).toContain(`Wrote ${out}`);
+    expect(JSON.parse(readFileSync(out, 'utf8')).files.length).toBeGreaterThan(3);
+    expect(
+      (await hof(['projects', '--json'])).json<{ projects: unknown[] }>().projects,
+    ).toHaveLength(before.length);
+  });
+
+  it('imports the scan, binds the directory, and conflicts on a repeat', async () => {
+    const result = await hof([
+      'scan',
+      repo,
+      '--name',
+      'Scanned self',
+      '--include',
+      'src/cli',
+      '--files',
+      'all',
+      '--docs', // no model configured → warning only
+    ]);
+    try {
+      expect(result.code).toBe(EXIT.ok);
+      expect(result.out).toMatch(
+        /^Imported "Scanned self" \([0-9a-f-]{36}\): \d+ components, \d+ files/,
+      );
+      expect(result.err).toContain('--docs skipped');
+      expect((await hof(['status'])).out).toContain('Scanned self');
+      // File nodes are addressable by their repository path.
+      const shown = await hof(['show', 'src/cli/hof.ts']);
+      expect(shown.code).toBe(EXIT.ok);
+      expect(shown.out).toContain('path: src/cli/hof.ts');
+      const again = await hof(['scan', repo, '--name', 'Scanned self', '--include', 'src/cli']);
+      expect(again.code).toBe(EXIT.domain);
+      expect(again.err).toContain('CONFLICT');
+    } finally {
+      // Put the binding back for the remaining tests.
+      await hof(['use', 'demo payments']);
+    }
   });
 });
 

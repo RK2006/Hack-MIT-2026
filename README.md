@@ -72,6 +72,8 @@ Then, from any directory:
 
 ```bash
 hof use "Demo Payments"     # writes .hof/project (git-ignored); --project/-p or HOF_PROJECT also work
+hof scan ~/code/my-service --name "My Service" --docs   # or: scan a real repo into a new project and bind to it
+                            # (--out file.json writes the manifest only; --docs needs an LLM key)
 hof status                  # counts: nodes, relationships, canonical/inferred, pending review, archived
 hof ls --type constraint    # also --inferred, --archived, --grep <text>
 hof show component.stripe-webhooks     # node refs: UUID prefix (≥ 8 chars), external key, or path

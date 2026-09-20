@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { parseArgs, type ParseArgsConfig } from 'node:util';
 import { compareRevisions } from '../lib/compare';
 import { ACCEPT_DEFAULTS, pendingReview, REJECT_DEFAULTS } from '../lib/review';
@@ -17,6 +17,7 @@ import {
 import { importPreparedProject } from '../server/ingestion/import';
 import { ingestDocumentation } from '../server/ingestion/docs';
 import { ingestPullRequest } from '../server/ingestion/github-pr';
+import { scanRepository } from '../server/ingestion/scan';
 import type { ProposalModel } from '../server/proposals/model';
 import { proposeContext } from '../server/proposals/propose';
 import {
@@ -178,6 +179,70 @@ export const COMMANDS: Record<string, Command> = {
         `Imported ${result.nodes} nodes, ${result.edges} edges, ${result.sources} sources into ${result.projectId}; bound via ${file}`,
         { ...result, file },
       );
+      return EXIT.ok;
+    },
+  },
+  scan: {
+    summary: 'Scan a git checkout into components/files, import it, and bind this directory',
+    usage:
+      'hof scan <path> [--name "Project"] [--depth N] [--max-files N] [--include <prefix>]... [--files source|all] [--out file.json] [--docs]',
+    options: {
+      name: { type: 'string', short: 'n' },
+      depth: { type: 'string', short: 'd' },
+      'max-files': { type: 'string' },
+      include: { type: 'string', short: 'i', multiple: true },
+      files: { type: 'string' },
+      out: { type: 'string', short: 'o' },
+      docs: { type: 'boolean' },
+    },
+    run: async (ctx) => {
+      const path = positional(ctx, 0, 'path');
+      const { values } = ctx.parsed;
+      const files = str(values, 'files') ?? 'source';
+      if (files !== 'source' && files !== 'all') throw usageError('--files must be source or all');
+      const { manifest, stats } = await scanRepository(path, {
+        name: str(values, 'name'),
+        depth: optionalNumber(str(values, 'depth'), 'depth'),
+        maxFiles: optionalNumber(str(values, 'max-files'), 'max-files'),
+        include: list(values, 'include'),
+        files,
+      });
+      const bytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
+      const out = str(values, 'out');
+      if (out) {
+        await writeFile(out, bytes);
+        emit(
+          ctx,
+          `Wrote ${out}: ${stats.components} components, ${stats.files} files (${stats.skipped} skipped) for "${manifest.project.name}". Import with \`hof init ${out}\`.`,
+          { ...stats, projectId: manifest.project.id, name: manifest.project.name, out },
+        );
+        return EXIT.ok;
+      }
+      const imported = await importPreparedProject(bytes, ctx.services.store);
+      const file = writeProjectBinding(ctx.io.cwd, imported.projectId);
+      const lines = [
+        `Imported "${manifest.project.name}" (${imported.projectId}): ${stats.components} components, ${stats.files} files, ${imported.edges} edges (${stats.skipped} files skipped); bound via ${file}`,
+      ];
+      let docs: unknown = null;
+      if (values.docs) {
+        const model = ctx.services.proposalModel();
+        if (!model) {
+          ctx.io.stderr(
+            'warning: --docs skipped; no proposal model key (ANTHROPIC/OPENAI/GEMINI_API_KEY) in .env\n',
+          );
+        } else {
+          const result = await ingestDocumentation(
+            { store: ctx.services.store, model },
+            imported.projectId,
+            path,
+          );
+          docs = result;
+          lines.push(
+            `Docs: ${result.created.nodes} proposed nodes, ${result.created.edges} edges from ${result.documents.length} documents. Review with \`hof pending\`.`,
+          );
+        }
+      }
+      emit(ctx, lines.join('\n'), { ...imported, stats, file, docs });
       return EXIT.ok;
     },
   },
