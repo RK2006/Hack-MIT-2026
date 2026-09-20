@@ -26,6 +26,7 @@
     "import:manifest": "tsx scripts/import-manifest.ts",
     "scan:repo": "tsx scripts/scan-repo.ts",
     "ingest:docs": "tsx scripts/ingest-docs.ts",
+    "demo:tripline": "tsx scripts/demo-tripline.ts",
     "hof": "tsx scripts/hof.ts"
   },
   "dependencies": {
