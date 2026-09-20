@@ -46,6 +46,33 @@ To use OpenAI instead, set `EMBEDDING_PROVIDER=openai` and `OPENAI_API_KEY`
    review it as canonical, then open History and compare v1 with v2.
 5. Recompile: the bundle now cites v2 (canonical); v1 remains readable in History.
 
+## `hof` command line
+
+`hof` ("handoff") is a git-shaped CLI over the same store and compiler. Bind a
+directory once, then explore, check out task context, and review proposals
+without typing UUIDs:
+
+```bash
+npm link                    # optional: installs a `hof` binary; otherwise use `npm run hof -- …`
+hof use "Demo Payments"     # writes .hof/project (git-ignored); --project/-p or HOF_PROJECT also work
+hof status                  # counts: nodes, relationships, canonical/inferred, pending review, archived
+hof ls --type constraint    # also --inferred, --archived, --grep <text>
+hof show component.stripe-webhooks     # node refs: UUID prefix (≥ 8 chars), external key, or path
+hof log 3a17141a && hof diff 3a17141a 1 2
+hof checkout "Fix duplicate Stripe webhook processing" --budget 2048 | pbcopy
+                            # stdout = exact context text; stderr = ranked selection with reasons
+claude -p "$(hof checkout 'Fix duplicate Stripe webhook processing')"
+hof pending                 # agent proposals not yet reviewed
+hof accept 3a17141a --note "Confirmed against staging"   # → canonical v2, operator provenance
+hof reject 773d49cb         # → archived
+hof propose notes.md --task "…"; hof ingest pr <url>; hof ingest docs .   # LLM key required
+hof serve                   # stdio MCP server (same as `npm run mcp`)
+```
+
+Every command takes `--json`. Exit codes: `0` ok, `1` domain error (`CODE: message`),
+`2` usage / no project bound, `3` environment (database or model key). See
+[the CLI spec](docs/specs/hof-cli.md).
+
 ## Agent handoff (MCP)
 
 Expose the compiler to a coding agent over stdio MCP:

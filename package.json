@@ -25,7 +25,8 @@
     "ingest:pr": "tsx scripts/ingest-pr.ts",
     "import:manifest": "tsx scripts/import-manifest.ts",
     "scan:repo": "tsx scripts/scan-repo.ts",
-    "ingest:docs": "tsx scripts/ingest-docs.ts"
+    "ingest:docs": "tsx scripts/ingest-docs.ts",
+    "hof": "tsx scripts/hof.ts"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",
@@ -52,5 +53,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.70.0",
     "vitest": "^4.1.11"
+  },
+  "bin": {
+    "hof": "scripts/hof.js"
   }
 }
