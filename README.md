@@ -15,8 +15,7 @@ The demo data is a clearly labeled **synthetic** payments project; its claims ar
 ```bash
 npm install
 docker compose up -d --wait postgres
-export DATABASE_URL='postgresql://context_graph:context_graph_local@127.0.0.1:5432/context_graph'
-export TEST_DATABASE_URL="$DATABASE_URL"
+cp .env.example .env         # then set DATABASE_URL (the Compose default is already in the example)
 npm run db:migrate
 npm run import:demo        # imports the synthetic payments project once (repeat = conflict, never overwrites)
 npm run dev                # workbench on http://127.0.0.1:3000 (loopback only)
@@ -24,8 +23,17 @@ npm run dev                # workbench on http://127.0.0.1:3000 (loopback only)
 
 All configuration lives in a git-ignored `.env` at the repo root (copy
 `.env.example`); every `npm run …` script and the Next.js dev server load it.
-Shell variables take precedence over `.env`, so `unset` a stale key exported in
-your shell profile if it is not the one you want. Never commit real credentials.
+Shell variables take precedence over `.env`: if you ever `export DATABASE_URL=…` (or an API key)
+in a terminal, that value silently wins — `unset` it or open a new terminal when switching
+databases. Never commit real credentials.
+
+### Sharing one graph across a team
+
+Point every teammate's `.env` at the same hosted PostgreSQL (e.g. a Neon connection string with
+`sslmode=require`) and set `OPERATOR_LABEL=<your name>` so reviews and edits are attributed to the
+person who made them. The store's per-project locking and expected-version conflicts already make
+concurrent edits safe; there is no authentication — anyone with the connection string has full
+access, so share it privately.
 
 Embeddings default to a local sentence-transformer (`EMBEDDING_PROVIDER=local`,
 `Xenova/all-MiniLM-L6-v2` via ONNX, no network after the first model download).

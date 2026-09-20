@@ -13,7 +13,19 @@ import {
 } from '../context/types';
 
 /** Every workbench write is attributed to the local human operator; payloads cannot choose it. */
-export const OPERATOR_ACTOR: Actor = { kind: 'human', label: 'local-operator' };
+export const DEFAULT_OPERATOR_LABEL = 'local-operator';
+
+/**
+ * Human writes are attributed to the operator running this process. OPERATOR_LABEL lets teammates
+ * sharing one database show up as themselves in provenance; it is attribution, not authentication.
+ */
+export function operatorActor(env: Record<string, string | undefined> = process.env): Actor {
+  const label = env.OPERATOR_LABEL?.trim();
+  return { kind: 'human', label: label && label.length <= 120 ? label : DEFAULT_OPERATOR_LABEL };
+}
+
+/** @deprecated use operatorActor(); kept for existing imports. */
+export const OPERATOR_ACTOR: Actor = operatorActor();
 
 const operatorEvidence = {
   evidenceNote: z.string().min(1).max(20_000),
@@ -111,7 +123,7 @@ export async function createOperatorNode(
     const node = await tx.createNode(projectId, {
       ...(provided as CreateNodeInput),
       sourceId: source.id,
-      actor: OPERATOR_ACTOR,
+      actor: operatorActor(),
       changeReason: req.changeReason,
     });
     let edge: ContextEdge | null = null;
@@ -123,7 +135,7 @@ export async function createOperatorNode(
         type: req.edge.type,
         authority: req.edge.authority,
         sourceId: source.id,
-        actor: OPERATOR_ACTOR,
+        actor: operatorActor(),
       });
     }
     return { node, edge };
@@ -143,7 +155,7 @@ export async function reviseOperatorNode(
     return tx.reviseNode(projectId, nodeId, {
       expectedVersion: req.expectedVersion,
       snapshot: { ...req.snapshot, sourceId: source.id },
-      actor: OPERATOR_ACTOR,
+      actor: operatorActor(),
       changeReason: req.changeReason,
     });
   });
