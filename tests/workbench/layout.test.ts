@@ -1,16 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import demo from '../../fixtures/demo-payments.json';
 import {
-  cardsOverlap,
-  GRAPH_NODE_HEIGHT,
-  GRAPH_NODE_WIDTH,
+  circleBoundaryPoint,
+  clampGraphZoom,
+  graphLabelsOverlap,
+  GRAPH_NODE_MIN_DISTANCE,
+  GRAPH_NODE_RADIUS,
+  GRAPH_ZOOM_MAX,
+  GRAPH_ZOOM_MIN,
   isSafeLink,
   layoutGraph,
-  rectangleBoundaryPoint,
+  nodesOverlap,
   wrapGraphTitle,
 } from '../../src/lib/layout';
 
 const nodes = Array.from({ length: 12 }, (_, i) => ({ id: `node-${i}` }));
+const WIDTH = 1400;
+const HEIGHT = 900;
 const edges = [
   { fromNodeId: 'node-0', toNodeId: 'node-1' },
   { fromNodeId: 'node-1', toNodeId: 'node-2' },
@@ -22,25 +28,25 @@ const edges = [
 
 describe('layoutGraph', () => {
   it('is deterministic for the same input', () => {
-    const a = layoutGraph(nodes, edges, 900, 600);
-    const b = layoutGraph(nodes, edges, 900, 600);
+    const a = layoutGraph(nodes, edges, WIDTH, HEIGHT);
+    const b = layoutGraph(nodes, edges, WIDTH, HEIGHT);
     expect([...a.entries()]).toEqual([...b.entries()]);
   });
 
   it('does not depend on node or edge order', () => {
-    const a = layoutGraph(nodes, edges, 900, 600);
-    const b = layoutGraph([...nodes].reverse(), [...edges].reverse(), 900, 600);
+    const a = layoutGraph(nodes, edges, WIDTH, HEIGHT);
+    const b = layoutGraph([...nodes].reverse(), [...edges].reverse(), WIDTH, HEIGHT);
     for (const [id, point] of a) expect(b.get(id)).toEqual(point);
   });
 
   it('positions every node inside the canvas and keeps connected nodes closer', () => {
-    const positions = layoutGraph(nodes, edges, 900, 600);
+    const positions = layoutGraph(nodes, edges, WIDTH, HEIGHT);
     expect(positions.size).toBe(nodes.length);
     for (const { x, y } of positions.values()) {
       expect(x).toBeGreaterThanOrEqual(0);
-      expect(x).toBeLessThanOrEqual(900);
+      expect(x).toBeLessThanOrEqual(WIDTH);
       expect(y).toBeGreaterThanOrEqual(0);
-      expect(y).toBeLessThanOrEqual(600);
+      expect(y).toBeLessThanOrEqual(HEIGHT);
     }
     const dist = (a: string, b: string) => {
       const p = positions.get(a)!;
@@ -52,23 +58,23 @@ describe('layoutGraph', () => {
     expect(linked).toBeLessThan(Math.max(...unlinked));
   });
 
-  it('keeps card-sized nodes separated inside the canvas', () => {
-    const positions = layoutGraph(nodes, edges, 900, 600);
+  it('keeps circular nodes separated inside the canvas', () => {
+    const positions = layoutGraph(nodes, edges, WIDTH, HEIGHT);
     const points = [...positions.entries()];
     for (const [, { x, y }] of points) {
-      expect(x).toBeGreaterThanOrEqual(GRAPH_NODE_WIDTH / 2);
-      expect(x).toBeLessThanOrEqual(900 - GRAPH_NODE_WIDTH / 2);
-      expect(y).toBeGreaterThanOrEqual(GRAPH_NODE_HEIGHT / 2);
-      expect(y).toBeLessThanOrEqual(600 - GRAPH_NODE_HEIGHT / 2);
+      expect(x).toBeGreaterThanOrEqual(GRAPH_NODE_MIN_DISTANCE / 2);
+      expect(x).toBeLessThanOrEqual(WIDTH - GRAPH_NODE_MIN_DISTANCE / 2);
+      expect(y).toBeGreaterThanOrEqual(GRAPH_NODE_MIN_DISTANCE / 2);
+      expect(y).toBeLessThanOrEqual(HEIGHT - GRAPH_NODE_MIN_DISTANCE / 2);
     }
     for (let i = 0; i < points.length; i += 1) {
       for (let j = i + 1; j < points.length; j += 1) {
-        expect(cardsOverlap(points[i]![1], points[j]![1])).toBe(false);
+        expect(nodesOverlap(points[i]![1], points[j]![1])).toBe(false);
       }
     }
   });
 
-  it('keeps every card in the full demo graph separated', () => {
+  it('keeps every node in the full demo graph separated on the roomy canvas', () => {
     const demoNodes = [...demo.components, ...demo.files, ...demo.claims].map(({ key }) => ({
       id: key,
     }));
@@ -79,30 +85,47 @@ describe('layoutGraph', () => {
       ),
       ...demo.files.map((node) => ({ fromNodeId: node.componentKey, toNodeId: node.key })),
     ];
-    const positions = [...layoutGraph(demoNodes, demoEdges, 900, 620).values()];
+    const positions = [...layoutGraph(demoNodes, demoEdges, WIDTH, HEIGHT).values()];
     expect(positions).toHaveLength(29);
     for (let i = 0; i < positions.length; i += 1) {
       for (let j = i + 1; j < positions.length; j += 1) {
-        expect(cardsOverlap(positions[i]!, positions[j]!)).toBe(false);
+        expect(nodesOverlap(positions[i]!, positions[j]!)).toBe(false);
+        expect(graphLabelsOverlap(positions[i]!, positions[j]!)).toBe(false);
       }
     }
+    const xs = positions.map(({ x }) => x);
+    const ys = positions.map(({ y }) => y);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(1_000);
+    expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(650);
+    expect(new Set(xs).size).toBeGreaterThan(10);
+    expect(new Set(ys).size).toBeGreaterThan(10);
   });
 
   it('handles empty and single-node graphs', () => {
-    expect(layoutGraph([], [], 900, 600).size).toBe(0);
-    expect(layoutGraph([{ id: 'only' }], [], 900, 600).get('only')).toEqual({ x: 450, y: 300 });
+    expect(layoutGraph([], [], WIDTH, HEIGHT).size).toBe(0);
+    expect(layoutGraph([{ id: 'only' }], [], WIDTH, HEIGHT).get('only')).toEqual({
+      x: WIDTH / 2,
+      y: HEIGHT / 2,
+    });
   });
 });
 
-describe('graph card geometry', () => {
-  it('clips horizontal and diagonal edges to the card boundary', () => {
-    expect(rectangleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 100 })).toEqual({
-      x: 100 + GRAPH_NODE_WIDTH / 2,
+describe('graph node geometry', () => {
+  it('clips horizontal and diagonal edges to the circle boundary', () => {
+    expect(circleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 100 })).toEqual({
+      x: 100 + GRAPH_NODE_RADIUS,
       y: 100,
     });
-    const diagonal = rectangleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 300 });
-    expect(diagonal.y).toBe(100 + GRAPH_NODE_HEIGHT / 2);
-    expect(diagonal.x).toBe(100 + GRAPH_NODE_HEIGHT / 2);
+    const diagonal = circleBoundaryPoint({ x: 100, y: 100 }, { x: 300, y: 300 });
+    const diagonalOffset = GRAPH_NODE_RADIUS / Math.SQRT2;
+    expect(diagonal.y).toBeCloseTo(100 + diagonalOffset);
+    expect(diagonal.x).toBeCloseTo(100 + diagonalOffset);
+  });
+
+  it('clamps zoom to the supported range', () => {
+    expect(clampGraphZoom(0.2)).toBe(GRAPH_ZOOM_MIN);
+    expect(clampGraphZoom(1.2)).toBe(1.2);
+    expect(clampGraphZoom(3)).toBe(GRAPH_ZOOM_MAX);
   });
 
   it('wraps titles to two bounded lines and marks truncation', () => {

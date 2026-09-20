@@ -2,18 +2,25 @@
 
 import { useMemo, useRef, useState } from 'react';
 import {
-  GRAPH_NODE_HEIGHT,
-  GRAPH_NODE_WIDTH,
+  circleBoundaryPoint,
+  clampGraphZoom,
+  GRAPH_LABEL_MAX_HEIGHT,
+  GRAPH_LABEL_WIDTH,
+  GRAPH_NODE_MIN_DISTANCE,
+  GRAPH_NODE_RADIUS,
+  GRAPH_ZOOM_MAX,
+  GRAPH_ZOOM_MIN,
+  GRAPH_ZOOM_STEP,
+  GRAPH_ZOOM_DEFAULT,
   layoutGraph,
-  rectangleBoundaryPoint,
   wrapGraphTitle,
   type Point,
 } from '@/lib/layout';
 import { NODE_TYPES, type ContextEdge, type ContextNode } from '@/server/context/types';
 import { NODE_COLORS } from './shared';
 
-const WIDTH = 900;
-const HEIGHT = 620;
+const WIDTH = 1400;
+const HEIGHT = 900;
 const DRAG_THRESHOLD = 4;
 
 type Props = {
@@ -49,6 +56,7 @@ export default function GraphView({
     key: string;
     positions: Map<string, Point>;
   }>({ key: layoutKey, positions: defaultPositions });
+  const [zoom, setZoom] = useState(GRAPH_ZOOM_DEFAULT);
   const positions = layoutState.key === layoutKey ? layoutState.positions : defaultPositions;
   const svgRef = useRef<SVGSVGElement>(null);
   const dragRef = useRef<{
@@ -87,7 +95,7 @@ export default function GraphView({
   return (
     <div className="graph-wrap">
       <div className="graph-toolbar">
-        <span>Drag nodes to adjust this view. Positions reset after reload or graph changes.</span>
+        <span>Drag nodes to adjust the network. Use the corner controls to zoom.</span>
         <button
           type="button"
           onClick={() => setLayoutState({ key: layoutKey, positions: new Map(defaultPositions) })}
@@ -95,183 +103,209 @@ export default function GraphView({
           Reset layout
         </button>
       </div>
-      <svg
-        ref={svgRef}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="graph"
-        role="img"
-        aria-label={`Graph with ${nodes.length} nodes and ${edges.length} edges`}
-      >
-        <defs>
-          <marker
-            id="arrow"
-            viewBox="0 0 10 10"
-            refX="10"
-            refY="5"
-            markerWidth="8"
-            markerHeight="8"
-            orient="auto-start-reverse"
+      <div className="graph-stage">
+        <div className="graph-scroll">
+          <svg
+            ref={svgRef}
+            viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+            className="graph"
+            style={{ width: `${zoom * 100}%` }}
+            role="img"
+            aria-label={`Graph with ${nodes.length} nodes and ${edges.length} edges`}
           >
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#555" />
-          </marker>
-        </defs>
-        {edges.map((edge) => {
-          const from = positions.get(edge.fromNodeId);
-          const to = positions.get(edge.toNodeId);
-          if (!from || !to) return null;
-          const start = rectangleBoundaryPoint(from, to, 1);
-          const end = rectangleBoundaryPoint(to, from, 5);
-          const inferred = edge.authority === 'inferred';
-          const onPath = highlightedEdgeIds?.has(edge.id) ?? false;
-          const related =
-            selectedNodeId === edge.fromNodeId || selectedNodeId === edge.toNodeId || onPath;
-          const label = `${edge.type}${inferred ? ' · inferred' : ''}`;
-          const labelWidth = label.length * 5.2 + 14;
-          return (
-            <g
-              key={edge.id}
-              className={`edge edge-${edge.authority}${onPath ? ' edge-path' : ''}${related ? ' edge-related' : ''}`}
-            >
-              <title>{label}</title>
-              <line
-                x1={start.x}
-                y1={start.y}
-                x2={end.x}
-                y2={end.y}
-                stroke={onPath ? '#f59e0b' : '#555'}
-                strokeWidth={onPath ? 3 : 1.2}
-                strokeDasharray={inferred ? '5 4' : undefined}
-                markerEnd="url(#arrow)"
-              />
-              <g
-                className="edge-label-group"
-                transform={`translate(${(from.x + to.x) / 2} ${(from.y + to.y) / 2})`}
+            <defs>
+              <marker
+                id="arrow"
+                viewBox="0 0 10 10"
+                refX="10"
+                refY="5"
+                markerWidth="8"
+                markerHeight="8"
+                orient="auto-start-reverse"
               >
-                <rect x={-labelWidth / 2} y={-9} width={labelWidth} height={16} rx={8} />
-                <text className="edge-label" textAnchor="middle" y={2.5}>
-                  {label}
-                </text>
-              </g>
-            </g>
-          );
-        })}
-        {nodes.map((node) => {
-          const p = positions.get(node.id);
-          if (!p) return null;
-          const selected = node.id === selectedNodeId;
-          const highlighted = highlightedNodeIds.has(node.id);
-          const inferred = node.current.authority === 'inferred';
-          const lines = wrapGraphTitle(node.current.title);
-          return (
-            <g
-              key={node.id}
-              className={`node${dragRef.current?.nodeId === node.id ? ' node-dragging' : ''}`}
-              transform={`translate(${p.x} ${p.y})`}
-              tabIndex={0}
-              role="button"
-              aria-label={`${node.current.title} (${node.type}, ${node.current.authority})`}
-              aria-pressed={selected}
-              onClick={() => {
-                if (suppressClickRef.current === node.id) {
-                  suppressClickRef.current = null;
-                  return;
-                }
-                onSelect(node.id);
-              }}
-              onPointerDown={(event) => {
-                if (event.button !== 0) return;
-                const point = graphPoint(event.clientX, event.clientY);
-                if (!point) return;
-                event.currentTarget.setPointerCapture(event.pointerId);
-                dragRef.current = {
-                  nodeId: node.id,
-                  pointerId: event.pointerId,
-                  startClientX: event.clientX,
-                  startClientY: event.clientY,
-                  offsetX: point.x - p.x,
-                  offsetY: point.y - p.y,
-                  moved: false,
-                };
-              }}
-              onPointerMove={(event) => {
-                const drag = dragRef.current;
-                if (!drag || drag.nodeId !== node.id || drag.pointerId !== event.pointerId) return;
-                const point = graphPoint(event.clientX, event.clientY);
-                if (!point) return;
-                if (
-                  Math.hypot(
-                    event.clientX - drag.startClientX,
-                    event.clientY - drag.startClientY,
-                  ) >= DRAG_THRESHOLD
-                ) {
-                  drag.moved = true;
-                }
-                if (!drag.moved) return;
-                event.preventDefault();
-                const x = Math.min(
-                  WIDTH - GRAPH_NODE_WIDTH / 2,
-                  Math.max(GRAPH_NODE_WIDTH / 2, point.x - drag.offsetX),
-                );
-                const y = Math.min(
-                  HEIGHT - GRAPH_NODE_HEIGHT / 2,
-                  Math.max(GRAPH_NODE_HEIGHT / 2, point.y - drag.offsetY),
-                );
-                setLayoutState((current) => {
-                  const next = new Map(
-                    current.key === layoutKey ? current.positions : defaultPositions,
-                  );
-                  next.set(node.id, { x, y });
-                  return { key: layoutKey, positions: next };
-                });
-              }}
-              onPointerUp={(event) => endDrag(node.id, event.pointerId)}
-              onPointerCancel={(event) => endDrag(node.id, event.pointerId)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  onSelect(node.id);
-                }
-              }}
-            >
-              {highlighted ? (
-                <rect
-                  x={-GRAPH_NODE_WIDTH / 2 - 5}
-                  y={-GRAPH_NODE_HEIGHT / 2 - 5}
-                  width={GRAPH_NODE_WIDTH + 10}
-                  height={GRAPH_NODE_HEIGHT + 10}
-                  rx={13}
-                  fill="none"
-                  stroke="#f59e0b"
-                  strokeWidth={4}
-                />
-              ) : null}
-              <rect
-                className="node-card"
-                x={-GRAPH_NODE_WIDTH / 2}
-                y={-GRAPH_NODE_HEIGHT / 2}
-                width={GRAPH_NODE_WIDTH}
-                height={GRAPH_NODE_HEIGHT}
-                rx={9}
-                fill={NODE_COLORS[node.type]}
-                fillOpacity={inferred ? 0.78 : 0.96}
-                stroke={selected ? '#111827' : '#fff'}
-                strokeWidth={selected ? 3 : 2}
-                strokeDasharray={inferred ? '6 4' : undefined}
-              />
-              <text y={-15} textAnchor="middle" className="node-type">
-                {node.type}
-              </text>
-              <text y={lines.length === 1 ? 8 : 1} textAnchor="middle" className="node-label">
-                {lines.map((line, index) => (
-                  <tspan key={`${index}-${line}`} x={0} dy={index === 0 ? 0 : 14}>
-                    {line}
-                  </tspan>
-                ))}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#555" />
+              </marker>
+            </defs>
+            {edges.map((edge) => {
+              const from = positions.get(edge.fromNodeId);
+              const to = positions.get(edge.toNodeId);
+              if (!from || !to) return null;
+              const start = circleBoundaryPoint(from, to, 1);
+              const end = circleBoundaryPoint(to, from, 5);
+              const inferred = edge.authority === 'inferred';
+              const onPath = highlightedEdgeIds?.has(edge.id) ?? false;
+              const related =
+                selectedNodeId === edge.fromNodeId || selectedNodeId === edge.toNodeId || onPath;
+              const label = `${edge.type}${inferred ? ' · inferred' : ''}`;
+              const labelWidth = label.length * 5.2 + 14;
+              return (
+                <g
+                  key={edge.id}
+                  className={`edge edge-${edge.authority}${onPath ? ' edge-path' : ''}${related ? ' edge-related' : ''}`}
+                >
+                  <title>{label}</title>
+                  <line
+                    x1={start.x}
+                    y1={start.y}
+                    x2={end.x}
+                    y2={end.y}
+                    stroke={onPath ? '#f59e0b' : '#555'}
+                    strokeWidth={onPath ? 3 : 1.2}
+                    strokeDasharray={inferred ? '5 4' : undefined}
+                    markerEnd="url(#arrow)"
+                  />
+                  <g
+                    className="edge-label-group"
+                    transform={`translate(${(from.x + to.x) / 2} ${(from.y + to.y) / 2})`}
+                  >
+                    <rect x={-labelWidth / 2} y={-9} width={labelWidth} height={16} rx={8} />
+                    <text className="edge-label" textAnchor="middle" y={2.5}>
+                      {label}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+            {nodes.map((node) => {
+              const p = positions.get(node.id);
+              if (!p) return null;
+              const selected = node.id === selectedNodeId;
+              const highlighted = highlightedNodeIds.has(node.id);
+              const inferred = node.current.authority === 'inferred';
+              const lines = wrapGraphTitle(node.current.title);
+              return (
+                <g
+                  key={node.id}
+                  className={`node${dragRef.current?.nodeId === node.id ? ' node-dragging' : ''}`}
+                  transform={`translate(${p.x} ${p.y})`}
+                  tabIndex={0}
+                  role="button"
+                  aria-label={`${node.current.title} (${node.type}, ${node.current.authority})`}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    if (suppressClickRef.current === node.id) {
+                      suppressClickRef.current = null;
+                      return;
+                    }
+                    onSelect(node.id);
+                  }}
+                  onPointerDown={(event) => {
+                    if (event.button !== 0) return;
+                    const point = graphPoint(event.clientX, event.clientY);
+                    if (!point) return;
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    dragRef.current = {
+                      nodeId: node.id,
+                      pointerId: event.pointerId,
+                      startClientX: event.clientX,
+                      startClientY: event.clientY,
+                      offsetX: point.x - p.x,
+                      offsetY: point.y - p.y,
+                      moved: false,
+                    };
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = dragRef.current;
+                    if (!drag || drag.nodeId !== node.id || drag.pointerId !== event.pointerId)
+                      return;
+                    const point = graphPoint(event.clientX, event.clientY);
+                    if (!point) return;
+                    if (
+                      Math.hypot(
+                        event.clientX - drag.startClientX,
+                        event.clientY - drag.startClientY,
+                      ) >= DRAG_THRESHOLD
+                    ) {
+                      drag.moved = true;
+                    }
+                    if (!drag.moved) return;
+                    event.preventDefault();
+                    const margin = GRAPH_NODE_MIN_DISTANCE / 2;
+                    const x = Math.min(WIDTH - margin, Math.max(margin, point.x - drag.offsetX));
+                    const y = Math.min(HEIGHT - margin, Math.max(margin, point.y - drag.offsetY));
+                    setLayoutState((current) => {
+                      const next = new Map(
+                        current.key === layoutKey ? current.positions : defaultPositions,
+                      );
+                      next.set(node.id, { x, y });
+                      return { key: layoutKey, positions: next };
+                    });
+                  }}
+                  onPointerUp={(event) => endDrag(node.id, event.pointerId)}
+                  onPointerCancel={(event) => endDrag(node.id, event.pointerId)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      onSelect(node.id);
+                    }
+                  }}
+                >
+                  {highlighted ? (
+                    <circle
+                      r={GRAPH_NODE_RADIUS + 7}
+                      fill="none"
+                      stroke="#f59e0b"
+                      strokeWidth={4}
+                    />
+                  ) : null}
+                  <circle
+                    className="node-circle"
+                    r={GRAPH_NODE_RADIUS}
+                    fill={NODE_COLORS[node.type]}
+                    fillOpacity={inferred ? 0.78 : 0.96}
+                    stroke={selected ? '#111827' : '#fff'}
+                    strokeWidth={selected ? 3 : 2}
+                    strokeDasharray={inferred ? '6 4' : undefined}
+                  />
+                  <text y={3.5} textAnchor="middle" className="node-type">
+                    {node.type.slice(0, 2).toUpperCase()}
+                  </text>
+                  <g
+                    className="node-title-label"
+                    transform={`translate(0 ${GRAPH_NODE_RADIUS + 9})`}
+                  >
+                    <rect
+                      x={-GRAPH_LABEL_WIDTH / 2}
+                      y={0}
+                      width={GRAPH_LABEL_WIDTH}
+                      height={lines.length > 1 ? GRAPH_LABEL_MAX_HEIGHT : 22}
+                      rx={6}
+                    />
+                    <text y={lines.length > 1 ? 12 : 15} textAnchor="middle" className="node-label">
+                      {lines.map((line, index) => (
+                        <tspan key={`${index}-${line}`} x={0} dy={index === 0 ? 0 : 13}>
+                          {line}
+                        </tspan>
+                      ))}
+                    </text>
+                  </g>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+        <div className="graph-zoom" role="group" aria-label="Graph zoom controls">
+          <button
+            type="button"
+            aria-label="Zoom out"
+            disabled={zoom <= GRAPH_ZOOM_MIN}
+            onClick={() => setZoom((value) => clampGraphZoom(value - GRAPH_ZOOM_STEP))}
+          >
+            −
+          </button>
+          <button type="button" aria-label="Reset zoom" onClick={() => setZoom(GRAPH_ZOOM_DEFAULT)}>
+            {Math.round(zoom * 100)}%
+          </button>
+          <button
+            type="button"
+            aria-label="Zoom in"
+            disabled={zoom >= GRAPH_ZOOM_MAX}
+            onClick={() => setZoom((value) => clampGraphZoom(value + GRAPH_ZOOM_STEP))}
+          >
+            +
+          </button>
+        </div>
+      </div>
       <ul className="legend" aria-label="Legend">
         {NODE_TYPES.map((type) => (
           <li key={type}>

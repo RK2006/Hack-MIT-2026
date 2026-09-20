@@ -1,8 +1,13 @@
 export type Point = { x: number; y: number };
 
-export const GRAPH_NODE_WIDTH = 160;
-export const GRAPH_NODE_HEIGHT = 64;
-export const GRAPH_NODE_GAP = 14;
+export const GRAPH_NODE_RADIUS = 20;
+export const GRAPH_NODE_MIN_DISTANCE = 124;
+export const GRAPH_LABEL_WIDTH = 124;
+export const GRAPH_LABEL_MAX_HEIGHT = 34;
+export const GRAPH_ZOOM_MIN = 0.6;
+export const GRAPH_ZOOM_MAX = 2;
+export const GRAPH_ZOOM_STEP = 0.2;
+export const GRAPH_ZOOM_DEFAULT = 1.4;
 
 /** FNV-1a 32-bit hash; gives every node a stable starting position without Math.random. */
 function hash(text: string): number {
@@ -30,16 +35,15 @@ export function layoutGraph(
   const ids = [...new Set(nodes.map((node) => node.id))].sort();
   const index = new Map(ids.map((id, i) => [id, i] as const));
   const n = ids.length;
-  const marginX = GRAPH_NODE_WIDTH / 2 + GRAPH_NODE_GAP;
-  const marginY = GRAPH_NODE_HEIGHT / 2 + GRAPH_NODE_GAP;
-  const innerW = Math.max(1, width - marginX * 2);
-  const innerH = Math.max(1, height - marginY * 2);
+  const margin = GRAPH_NODE_MIN_DISTANCE / 2;
+  const innerW = Math.max(1, width - margin * 2);
+  const innerH = Math.max(1, height - margin * 2);
   const xs = new Float64Array(n);
   const ys = new Float64Array(n);
   ids.forEach((id, i) => {
     const h = hash(id);
-    xs[i] = marginX + ((h & 0xffff) / 0xffff) * innerW;
-    ys[i] = marginY + (((h >>> 16) & 0xffff) / 0xffff) * innerH;
+    xs[i] = margin + ((h & 0xffff) / 0xffff) * innerW;
+    ys[i] = margin + (((h >>> 16) & 0xffff) / 0xffff) * innerH;
   });
   if (n === 1) {
     result.set(ids[0]!, { x: width / 2, y: height / 2 });
@@ -52,7 +56,7 @@ export function layoutGraph(
     if (a !== undefined && b !== undefined && a !== b) links.push([a, b]);
   }
   const area = innerW * innerH;
-  const k = Math.sqrt(area / n) * 0.8;
+  const k = Math.sqrt(area / n) * 1.05;
   const dx = new Float64Array(n);
   const dy = new Float64Array(n);
   let temperature = Math.max(innerW, innerH) / 10;
@@ -96,147 +100,82 @@ export function layoutGraph(
     const cx = width / 2;
     const cy = height / 2;
     for (let i = 0; i < n; i += 1) {
-      dx[i] = dx[i]! + (cx - xs[i]!) * 0.02;
-      dy[i] = dy[i]! + (cy - ys[i]!) * 0.02;
+      dx[i] = dx[i]! + (cx - xs[i]!) * 0.012;
+      dy[i] = dy[i]! + (cy - ys[i]!) * 0.012;
       const len = Math.hypot(dx[i]!, dy[i]!);
       const limit = Math.min(len, temperature);
       if (len > 0) {
         xs[i] = xs[i]! + (dx[i]! / len) * limit;
         ys[i] = ys[i]! + (dy[i]! / len) * limit;
       }
-      xs[i] = Math.min(width - marginX, Math.max(marginX, xs[i]!));
-      ys[i] = Math.min(height - marginY, Math.max(marginY, ys[i]!));
+      xs[i] = Math.min(width - margin, Math.max(margin, xs[i]!));
+      ys[i] = Math.min(height - margin, Math.max(margin, ys[i]!));
     }
     temperature = Math.max(0.5, temperature - cooling);
   }
 
-  // The force pass treats nodes as points. Resolve card-sized collisions after it
-  // so both the node surfaces and their labels remain readable.
-  separateCards(xs, ys, width, height, marginX, marginY);
-  if (hasCardOverlap(xs, ys)) packCardsOnGrid(xs, ys, width, height);
+  // Preserve the organic force shape while reserving enough radial room for the
+  // circle and its bounded label.
+  separateNodes(xs, ys, width, height, margin);
   ids.forEach((id, i) => {
     result.set(id, { x: round(xs[i]!), y: round(ys[i]!) });
   });
   return result;
 }
 
-function hasCardOverlap(xs: Float64Array, ys: Float64Array): boolean {
-  for (let i = 0; i < xs.length; i += 1) {
-    for (let j = i + 1; j < xs.length; j += 1) {
-      if (cardsOverlap({ x: xs[i]!, y: ys[i]! }, { x: xs[j]!, y: ys[j]! })) return true;
-    }
-  }
-  return false;
-}
-
-/**
- * Dense graphs can pin collision relaxation against the canvas boundary. In that
- * case, assign the force-directed result to the nearest collision-free grid slots.
- * This keeps the force layout's broad grouping while guaranteeing readable cards.
- */
-function packCardsOnGrid(xs: Float64Array, ys: Float64Array, width: number, height: number) {
-  const stepX = GRAPH_NODE_WIDTH + GRAPH_NODE_GAP;
-  const stepY = GRAPH_NODE_HEIGHT + GRAPH_NODE_GAP;
-  const maxColumns = Math.max(1, Math.floor((width - GRAPH_NODE_WIDTH) / stepX) + 1);
-  const maxRows = Math.max(1, Math.floor((height - GRAPH_NODE_HEIGHT) / stepY) + 1);
-  const minimumColumns = Math.ceil(xs.length / maxRows);
-  const idealColumns = Math.ceil(
-    Math.sqrt((xs.length * width * stepY) / Math.max(1, height * stepX)),
-  );
-  const columns = Math.min(maxColumns, Math.max(minimumColumns, idealColumns));
-  const rows = Math.ceil(xs.length / columns);
-  const startX = (width - (columns - 1) * stepX) / 2;
-  const startY = (height - (rows - 1) * stepY) / 2;
-  const slots: Point[] = [];
-  for (let row = 0; row < rows; row += 1) {
-    for (let column = 0; column < columns && slots.length < xs.length; column += 1) {
-      slots.push({ x: startX + column * stepX, y: startY + row * stepY });
-    }
-  }
-  const choices: Array<{ nodeIndex: number; slotIndex: number; distance: number }> = [];
-  for (let nodeIndex = 0; nodeIndex < xs.length; nodeIndex += 1) {
-    for (let slotIndex = 0; slotIndex < slots.length; slotIndex += 1) {
-      const slot = slots[slotIndex]!;
-      choices.push({
-        nodeIndex,
-        slotIndex,
-        distance: Math.hypot(xs[nodeIndex]! - slot.x, ys[nodeIndex]! - slot.y),
-      });
-    }
-  }
-  choices.sort(
-    (a, b) => a.distance - b.distance || a.nodeIndex - b.nodeIndex || a.slotIndex - b.slotIndex,
-  );
-  const assignedNodes = new Set<number>();
-  const assignedSlots = new Set<number>();
-  for (const choice of choices) {
-    if (assignedNodes.has(choice.nodeIndex) || assignedSlots.has(choice.slotIndex)) continue;
-    const slot = slots[choice.slotIndex]!;
-    xs[choice.nodeIndex] = slot.x;
-    ys[choice.nodeIndex] = slot.y;
-    assignedNodes.add(choice.nodeIndex);
-    assignedSlots.add(choice.slotIndex);
-    if (assignedNodes.size === xs.length) break;
-  }
-}
-
-function separateCards(
+function separateNodes(
   xs: Float64Array,
   ys: Float64Array,
   width: number,
   height: number,
-  marginX: number,
-  marginY: number,
+  margin: number,
 ) {
-  const requiredX = GRAPH_NODE_WIDTH + GRAPH_NODE_GAP;
-  const requiredY = GRAPH_NODE_HEIGHT + GRAPH_NODE_GAP;
-  for (let pass = 0; pass < 240; pass += 1) {
+  for (let pass = 0; pass < 2_000; pass += 1) {
     let moved = false;
     for (let i = 0; i < xs.length; i += 1) {
       for (let j = i + 1; j < xs.length; j += 1) {
-        const vx = xs[j]! - xs[i]!;
-        const vy = ys[j]! - ys[i]!;
-        const overlapX = requiredX - Math.abs(vx);
-        const overlapY = requiredY - Math.abs(vy);
-        if (overlapX <= 0 || overlapY <= 0) continue;
-        moved = true;
-        if (overlapX <= overlapY) {
-          const direction = vx === 0 ? ((i + j) % 2 === 0 ? 1 : -1) : Math.sign(vx);
-          const push = overlapX / 2 + 0.05;
-          xs[i] = xs[i]! - direction * push;
-          xs[j] = xs[j]! + direction * push;
-        } else {
-          const direction = vy === 0 ? ((i + j) % 2 === 0 ? 1 : -1) : Math.sign(vy);
-          const push = overlapY / 2 + 0.05;
-          ys[i] = ys[i]! - direction * push;
-          ys[j] = ys[j]! + direction * push;
+        let vx = xs[j]! - xs[i]!;
+        let vy = ys[j]! - ys[i]!;
+        let distance = Math.hypot(vx, vy);
+        if (distance >= GRAPH_NODE_MIN_DISTANCE) continue;
+        if (distance < 0.01) {
+          vx = (i + j) % 2 === 0 ? 1 : -1;
+          vy = 1;
+          distance = Math.SQRT2;
         }
-        xs[i] = Math.min(width - marginX, Math.max(marginX, xs[i]!));
-        xs[j] = Math.min(width - marginX, Math.max(marginX, xs[j]!));
-        ys[i] = Math.min(height - marginY, Math.max(marginY, ys[i]!));
-        ys[j] = Math.min(height - marginY, Math.max(marginY, ys[j]!));
+        moved = true;
+        const push = (GRAPH_NODE_MIN_DISTANCE - distance) / 2 + 0.2;
+        const ux = vx / distance;
+        const uy = vy / distance;
+        xs[i] = Math.min(width - margin, Math.max(margin, xs[i]! - ux * push));
+        xs[j] = Math.min(width - margin, Math.max(margin, xs[j]! + ux * push));
+        ys[i] = Math.min(height - margin, Math.max(margin, ys[i]! - uy * push));
+        ys[j] = Math.min(height - margin, Math.max(margin, ys[j]! + uy * push));
       }
     }
     if (!moved) break;
   }
 }
 
-export function cardsOverlap(a: Point, b: Point, gap = 0): boolean {
-  return (
-    Math.abs(a.x - b.x) < GRAPH_NODE_WIDTH + gap && Math.abs(a.y - b.y) < GRAPH_NODE_HEIGHT + gap
-  );
+export function nodesOverlap(a: Point, b: Point, minimumDistance = GRAPH_NODE_MIN_DISTANCE) {
+  return Math.hypot(a.x - b.x, a.y - b.y) < minimumDistance;
 }
 
-/** Finds where a center-to-center edge meets the boundary of a graph node card. */
-export function rectangleBoundaryPoint(from: Point, to: Point, padding = 0): Point {
+export function graphLabelsOverlap(a: Point, b: Point): boolean {
+  return Math.abs(a.x - b.x) < GRAPH_LABEL_WIDTH && Math.abs(a.y - b.y) < GRAPH_LABEL_MAX_HEIGHT;
+}
+
+/** Finds where a center-to-center edge meets the boundary of a circular graph node. */
+export function circleBoundaryPoint(from: Point, to: Point, padding = 0): Point {
   const dx = to.x - from.x;
   const dy = to.y - from.y;
   if (dx === 0 && dy === 0) return { ...from };
-  const scale = Math.min(
-    (GRAPH_NODE_WIDTH / 2 + padding) / Math.max(Number.EPSILON, Math.abs(dx)),
-    (GRAPH_NODE_HEIGHT / 2 + padding) / Math.max(Number.EPSILON, Math.abs(dy)),
-  );
+  const scale = (GRAPH_NODE_RADIUS + padding) / Math.hypot(dx, dy);
   return { x: from.x + dx * scale, y: from.y + dy * scale };
+}
+
+export function clampGraphZoom(zoom: number): number {
+  return Math.min(GRAPH_ZOOM_MAX, Math.max(GRAPH_ZOOM_MIN, round(zoom)));
 }
 
 /** Wraps a card title to a bounded number of deterministic SVG text lines. */
