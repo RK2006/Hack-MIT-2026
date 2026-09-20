@@ -1,0 +1,389 @@
+{
+  "schemaVersion": 1,
+  "project": {
+    "id": "3c1d7a2e-5b8f-4c0a-9e6d-2f4b8a1c9d02",
+    "name": "Context Graph (this repository)"
+  },
+  "sources": [
+    {
+      "key": "source.repository",
+      "kind": "repository",
+      "uri": "https://github.com/AnmolKaran/hackmit-2026",
+      "label": "hackmit-2026 repository structure",
+      "excerpt": "Declared structure of the context-graph repository itself, written by hand from the tree at import time. Not a synthetic prepared example of another system; the paths are real, but this manifest is a curated summary rather than an automated scan.",
+      "actorLabel": "self-manifest-importer"
+    },
+    {
+      "key": "source.specs",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/hackmit-2026/tree/main/docs/specs",
+      "label": "Feature specs under docs/specs",
+      "excerpt": "Decisions and constraints below are lifted from the reviewed feature specs in docs/specs (foundation, ingestion, workbench, compiler, MCP, proposals). Where this repository is the subject, 'synthetic prepared example' refers only to the payments demo fixture, not to these claims.",
+      "actorLabel": "project-team"
+    }
+  ],
+  "components": [
+    {
+      "key": "component.server",
+      "title": "Server",
+      "content": "Server-side TypeScript under src/server: graph store, ingestion, compiler, proposals, MCP, and HTTP helpers. Browser code never imports it directly except through Next.js route handlers.",
+      "summary": "All server-side modules.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository"
+    },
+    {
+      "key": "component.graph-store",
+      "title": "Graph store",
+      "content": "PostgreSQL-backed store for projects, immutable sources, node identities, append-only node revisions, and immutable edges. Enforces validation, authority rules, project mutation locking, and typed errors. Lives in src/server/context.",
+      "summary": "Versioned graph persistence and authority rules.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.server"
+    },
+    {
+      "key": "component.compiler",
+      "title": "Task context compiler",
+      "content": "Turns a task into a bounded, explainable context bundle: embedding similarity seeds, weighted typed-edge expansion, authority-aware ranking, cl100k_base budget packing, and selection reasons. Lives in src/server/context/compiler.",
+      "summary": "Semantic + graph retrieval and token-budget packing.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.server"
+    },
+    {
+      "key": "component.ingestion",
+      "title": "Ingestion",
+      "content": "Prepared-manifest importer (validated JSON to a new project in one transaction) and the GitHub pull request adapter. Lives in src/server/ingestion.",
+      "summary": "Manifest import and PR ingestion.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.server"
+    },
+    {
+      "key": "component.proposals",
+      "title": "Agent proposals",
+      "content": "Turns text (agent notes, PR digests) into proposed knowledge through one strict-JSON LLM call, writing inferred nodes and edges with agent provenance for human review. Lives in src/server/proposals.",
+      "summary": "LLM-extracted inferred knowledge for review.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.server"
+    },
+    {
+      "key": "component.mcp",
+      "title": "MCP server",
+      "content": "Stdio Model Context Protocol server exposing list_projects, compile_context, get_node, get_source, propose_context, and ingest_pull_request to coding agents. Lives in src/server/mcp and scripts/mcp-server.ts.",
+      "summary": "Agent-facing tool surface.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "parentKey": "component.server"
+    },
+    {
+      "key": "component.workbench",
+      "title": "Workbench UI",
+      "content": "Next.js App Router UI: graph and list views, node detail with evidence, edit/review/archive forms, revision comparison, review queue for agent proposals, and the task context panel. Lives in src/app and src/components/workbench.",
+      "summary": "Operator UI for inspecting, reviewing, and compiling context.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository"
+    }
+  ],
+  "files": [
+    {
+      "key": "file.store",
+      "path": "src/server/context/store.ts",
+      "title": "store.ts",
+      "content": "createGraphStore: transactions, project locking, node/edge creation, revision append, graph reads.",
+      "summary": "Graph store implementation.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.graph-store"
+    },
+    {
+      "key": "file.validation",
+      "path": "src/server/context/validation.ts",
+      "title": "validation.ts",
+      "content": "Zod parsers for store inputs and the actor/authority matrix (authorizeCreateNode, authorizeRevision, authorizeEdge).",
+      "summary": "Input validation and authority rules.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.graph-store"
+    },
+    {
+      "key": "file.compile",
+      "path": "src/server/context/compiler/compile.ts",
+      "title": "compile.ts",
+      "content": "compileContext orchestration: snapshot, embeddings with cache, retrieval, packing, bundle assembly.",
+      "summary": "Compiler entry point.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.compiler"
+    },
+    {
+      "key": "file.retrieval",
+      "path": "src/server/context/compiler/retrieval.ts",
+      "title": "retrieval.ts",
+      "content": "Seed discovery, weighted BFS expansion with hub rule, eligibility floor, scoring and ranking, selection reasons.",
+      "summary": "Retrieval and ranking algorithm.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.compiler"
+    },
+    {
+      "key": "file.pack",
+      "path": "src/server/context/compiler/pack.ts",
+      "title": "pack.ts",
+      "content": "Greedy rank-order packing with full/summary/title representations and whole-text token counting.",
+      "summary": "Budget packing.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.compiler"
+    },
+    {
+      "key": "file.import",
+      "path": "src/server/ingestion/import.ts",
+      "title": "import.ts",
+      "content": "importPreparedProject: one transaction creating project, sources, nodes, structural and explicit edges.",
+      "summary": "Manifest importer.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.ingestion"
+    },
+    {
+      "key": "file.github-pr",
+      "path": "src/server/ingestion/github-pr.ts",
+      "title": "github-pr.ts",
+      "content": "Fetches a pull request through the gh CLI, builds a bounded digest, and runs it through proposeContext with the PR URL as source.",
+      "summary": "GitHub PR ingestion adapter.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.ingestion"
+    },
+    {
+      "key": "file.propose",
+      "path": "src/server/proposals/propose.ts",
+      "title": "propose.ts",
+      "content": "proposeContext: prompt, strict parse, transactional write of inferred nodes/edges with agent source, drop reporting.",
+      "summary": "Proposal pipeline.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.proposals"
+    },
+    {
+      "key": "file.mcp-server",
+      "path": "src/server/mcp/server.ts",
+      "title": "server.ts (MCP)",
+      "content": "createContextGraphMcpServer: tool registration with Zod schemas and GraphError to tool-error mapping.",
+      "summary": "MCP tool definitions.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.mcp"
+    },
+    {
+      "key": "file.workbench",
+      "path": "src/components/workbench/Workbench.tsx",
+      "title": "Workbench.tsx",
+      "content": "Client state owner: graph snapshot, selection, views (graph/list/review/archived), forms, highlights, task panel wiring.",
+      "summary": "Workbench root component.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.workbench"
+    },
+    {
+      "key": "file.review-list",
+      "path": "src/components/workbench/PendingReviewList.tsx",
+      "title": "PendingReviewList.tsx",
+      "content": "Review queue of agent-authored inferred nodes with Accept / Edit & accept / Reject actions.",
+      "summary": "Proposal review queue UI.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.repository",
+      "componentKey": "component.workbench"
+    }
+  ],
+  "claims": [
+    {
+      "key": "constraint.append-only-revisions",
+      "type": "constraint",
+      "title": "Node history is append-only; sources and edges are immutable",
+      "content": "No product table is ever updated or deleted through the application. Editing a node inserts a new full revision snapshot; correcting a relationship means archiving a node, not deleting an edge. Revisions cite an immutable source. This is what makes provenance and history trustworthy.",
+      "summary": "Never mutate history; append revisions instead.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Foundation spec §7 invariant"
+    },
+    {
+      "key": "constraint.agents-write-inferred-only",
+      "type": "constraint",
+      "title": "Agents can only create inferred knowledge",
+      "content": "An agent actor with agent evidence may create or update inferred nodes and edges only; it can never create, edit, or demote a canonical node. Promotion to canonical requires a human revision with manual evidence. Enforced in validation.ts, not in prompts.",
+      "summary": "Canonical requires a human.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Foundation spec §6 authority matrix"
+    },
+    {
+      "key": "constraint.budget-counts-whole-text",
+      "type": "constraint",
+      "title": "The token budget bounds the complete rendered context text",
+      "content": "compileContext counts the entire rendered Markdown (headers, items, reasons, citations, omissions, warnings) with cl100k_base and guarantees tokenCount <= tokenBudget on every path, including degraded and empty-fit cases. Snippets are never counted independently.",
+      "summary": "Count the whole text, not parts.",
+      "importance": 5,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Compiler spec §10 stage 5"
+    },
+    {
+      "key": "decision.local-embeddings-default",
+      "type": "decision",
+      "title": "Default to a local ONNX sentence-transformer for embeddings",
+      "content": "EMBEDDING_PROVIDER=local runs Xenova/all-MiniLM-L6-v2 in-process via @xenova/transformers 2.17 (the newer @huggingface/transformers native binding does not load on macOS 12). An OpenAI adapter exists behind the same interface. The cache key includes the model id so switching providers never reuses vectors.",
+      "summary": "Local model by default; hosted optional.",
+      "importance": 4,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Compiler spec §8 resolved gates"
+    },
+    {
+      "key": "decision.extensionless-imports",
+      "type": "decision",
+      "title": "Relative imports are extensionless and migrations are embedded strings",
+      "content": "Turbopack cannot resolve .js-suffixed imports to .ts sources and rewrites new URL(..., import.meta.url) file reads as static assets, so src uses extensionless relative imports and SQL migrations live in src/server/db/migrations.ts as strings.",
+      "summary": "Bundler-safe module and migration conventions.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Workbench spec §18 findings"
+    },
+    {
+      "key": "decision.pending-review-derived",
+      "type": "decision",
+      "title": "Pending review is derived, not stored",
+      "content": "A node is pending review when its current revision is inferred and its actor kind is agent. No schema or route was added for the queue; accept and reject are ordinary human revisions through POST /nodes/:id/revisions.",
+      "summary": "Review queue is a filter over current revisions.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Workbench spec W8"
+    },
+    {
+      "key": "decision.proposal-model-fallbacks",
+      "type": "decision",
+      "title": "Proposal LLM calls retry with backoff and walk a fallback model list",
+      "content": "Free-tier Gemini returned 503/429 on most single calls, so each model gets up to four attempts with 1/2/4 s backoff and PROPOSAL_MODEL accepts a comma-separated fallback list. Provenance records the model that actually answered.",
+      "summary": "Retries plus fallbacks; record the answering model.",
+      "importance": 3,
+      "confidence": 1,
+      "sourceKey": "source.specs",
+      "changeReason": "Proposals spec §18 live-run findings"
+    }
+  ],
+  "edges": [
+    {
+      "fromKey": "component.graph-store",
+      "toKey": "constraint.append-only-revisions",
+      "type": "REQUIRES",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.graph-store",
+      "toKey": "constraint.agents-write-inferred-only",
+      "type": "REQUIRES",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "file.validation",
+      "toKey": "constraint.agents-write-inferred-only",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.proposals",
+      "toKey": "constraint.agents-write-inferred-only",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.compiler",
+      "toKey": "constraint.budget-counts-whole-text",
+      "type": "REQUIRES",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "file.pack",
+      "toKey": "constraint.budget-counts-whole-text",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.compiler",
+      "toKey": "decision.local-embeddings-default",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "decision.extensionless-imports",
+      "toKey": "component.server",
+      "type": "CONSTRAINS",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "file.review-list",
+      "toKey": "decision.pending-review-derived",
+      "type": "IMPLEMENTS",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.proposals",
+      "toKey": "decision.proposal-model-fallbacks",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.mcp",
+      "toKey": "component.compiler",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.mcp",
+      "toKey": "component.proposals",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.ingestion",
+      "toKey": "component.proposals",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.workbench",
+      "toKey": "component.compiler",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    },
+    {
+      "fromKey": "component.workbench",
+      "toKey": "component.graph-store",
+      "type": "DEPENDS_ON",
+      "sourceKey": "source.specs"
+    }
+  ]
+}

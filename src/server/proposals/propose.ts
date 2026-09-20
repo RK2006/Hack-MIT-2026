@@ -6,7 +6,12 @@ import { buildProposalPrompt, normalizeKey, parseModelProposal, PROPOSAL_LIMITS 
 
 export type { ProposalModel } from './model';
 
-export type ProposalRequest = { text: string; taskHint?: string | undefined };
+export type ProposalRequest = {
+  text: string;
+  taskHint?: string | undefined;
+  /** Where the text came from (e.g. a pull request); the source kind stays `agent` because an LLM extracted the claims. */
+  source?: { uri: string; label: string } | undefined;
+};
 
 export type ProposalResult = {
   projectId: string;
@@ -106,8 +111,8 @@ export async function proposeContext(
   const result = await deps.store.transaction(async (tx) => {
     const source = await tx.createSource(projectId, {
       kind: 'agent',
-      uri: `agent://proposals/${randomUUID()}`,
-      label: `Agent proposal (${modelId})`.slice(0, 200),
+      uri: request.source?.uri ?? `agent://proposals/${randomUUID()}`,
+      label: (request.source?.label ?? `Agent proposal (${modelId})`).slice(0, 200),
       excerpt,
       revisionRef: null,
     });

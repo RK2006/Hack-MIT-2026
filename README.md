@@ -86,6 +86,18 @@ npm run propose -- 7f63f0c8-9a4e-4e2a-8ebd-a8f2b3f8c101 notes.md --task "Fix dup
 Proposals appear in the workbench with the inferred badge and agent evidence; review them
 canonical or archive them. Agents can never write canonical knowledge.
 
+## GitHub pull requests → knowledge
+
+With `gh` logged in and an LLM key in `.env`, turn a PR into proposals whose evidence links to the PR:
+
+```bash
+npm run import:manifest -- fixtures/context-graph-self.json   # once: a project describing this repo
+npm run ingest:pr -- 3c1d7a2e-5b8f-4c0a-9e6d-2f4b8a1c9d02 https://github.com/AnmolKaran/hackmit-2026/pull/2
+```
+
+Also available to agents as the MCP tool `ingest_pull_request`. Review the results in the
+workbench's **Review** tab.
+
 ## Verification
 
 ```bash
