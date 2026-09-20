@@ -374,10 +374,11 @@ selection reasons. No source text or secrets in request logs.
 - [~] Replace the stacked detail/task split with persistent tab panels, simplify the
       task form with progressive disclosure and result summary, and clarify inferred
       graph styling; verify automated checks and complete browser visual review (A8).
-- [~] Apply the field-notebook theme (W9a): load Bricolage Grotesque / Source Sans 3 /
+- [x] Apply the field-notebook theme (W9a): load Bricolage Grotesque / Source Sans 3 /
       Fira Code via `next/font`, replace the token set and remove card chrome in
       `globals.css`, move GraphView SVG colors into CSS classes and retune `NODE_COLORS`
-      for sage paper; verify typecheck/lint/format/unit/build and review in the browser.
+      for sage paper; typecheck/lint/format/unit/build pass and the operator reviewed
+      graph, detail, task, and review-queue surfaces in the browser (2026-09-19).
 
 ## 17. Alternatives considered
 
@@ -459,11 +460,34 @@ Findings from the read/edit/history slice:
   visual curves because reversing an edge reverses its perpendicular normal. Parallel
   same-direction edges fan around the centerline. Labels use the midpoint of their own
   quadratic path and retain the existing low-opacity default instead of disappearing.
-- The workbench uses a dependency-free system sans stack and an 8 px-oriented spacing
-  rhythm. Monospace is reserved for technical values and exact agent context. The
-  detail panel exposes the same data as before but progressively discloses raw IDs,
-  paths, and revision metadata under native `<details>` rather than presenting the
-  entire node as a database-style definition list.
+- The workbench originally used a dependency-free system sans stack; W9a replaced it
+  with Bricolage Grotesque / Source Sans 3 / Fira Code via `next/font/google`, which
+  downloads once at build/dev start and self-hosts from `/_next/static/media` (no
+  runtime request, but the first `next dev`/`next build` needs network). Monospace is
+  reserved for technical values and exact agent context. The detail panel exposes the
+  same data as before but progressively discloses raw IDs, paths, and revision
+  metadata under native `<details>` rather than presenting the entire node as a
+  database-style definition list.
+
+Findings from the field-notebook theme (W9a):
+
+- All color lives in `:root` tokens in `globals.css` plus `NODE_COLORS` in
+  `shared.tsx`; `GraphView` carries no hex values. SVG colors are applied through
+  classes (`edge-line`, `node-circle`, `node-circle-selected`, `node-highlight-ring`)
+  and two `<marker>` definitions (`arrow`, `arrow-path`) so highlighted arrowheads
+  match their amber stroke. Changing the palette is a token edit only.
+- Hover states never change hue. Rust is a static mark (inline links, focus rings,
+  relationship arrows, "changed"); hover feedback is tint, underline, or a revealed
+  arrow. A brand color reacting to the cursor was the strongest "generic AI UI" tell.
+- Graph labels are text with a paper-colored halo (`paint-order: stroke fill`), not
+  boxed rectangles; the label `<rect>`s remain in the markup for geometry tests but
+  render transparent. The dashed ochre INFERRED tag is the one intentional badge.
+- Authority uses a single device everywhere: canonical = solid rule / green ink with a
+  dot; inferred = dashed rule / ochre ink. Pending proposals in the review queue reuse
+  the dashed ochre rule rather than their own color.
+- Two directions were tried and rejected in the browser before this one: a dark
+  "instrument panel" (read as a generic dev tool) and a cream paper + reading serif
+  "editorial" variant (read as a well-known AI assistant's brand).
 - The selected node is fetched via `GET /nodes/:id` rather than read from the graph
   snapshot so archived nodes open in the same detail/history/restore path.
 

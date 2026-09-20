@@ -678,10 +678,15 @@ tr.changed {
 .graph .node-dragging {
   cursor: grabbing;
 }
+/* Labels are text on the page, not boxes: a paper-colored halo knocks out the grid and edges. */
 .graph .node-label {
   font-size: 10.5px;
   font-weight: 600;
   fill: var(--text);
+  stroke: var(--panel);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
   pointer-events: none;
 }
 .graph .node-type {
@@ -697,7 +702,7 @@ tr.changed {
   pointer-events: none;
 }
 .graph .node-title-label rect {
-  fill: rgb(252 250 246 / 88%);
+  fill: none;
   stroke: none;
 }
 .graph .node-authority-marker {
@@ -760,7 +765,7 @@ tr.changed {
   opacity: 1;
 }
 .graph .edge-label-group rect {
-  fill: var(--panel);
+  fill: none;
   stroke: none;
 }
 .graph .edge-label {
@@ -769,9 +774,16 @@ tr.changed {
   font-weight: 500;
   fill: var(--text-secondary);
   letter-spacing: 0.04em;
+  stroke: var(--panel);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  paint-order: stroke fill;
 }
 .graph .edge-inferred .edge-label {
   fill: var(--inferred);
+}
+.graph .edge-path .edge-label {
+  fill: var(--text);
 }
 .legend {
   list-style: none;
@@ -1437,28 +1449,32 @@ table.archived td:first-child {
   flex-direction: column;
   gap: 10px;
 }
+/* Pending proposals share the inferred device: a dashed ochre rule, no box. */
 .review-item {
-  border: 1px dashed #fcd34d;
-  background: #fffbeb;
-  border-radius: 8px;
-  padding: 10px 12px;
+  padding: 12px 0 12px 14px;
+  border-left: 2px dashed var(--inferred);
+  border-bottom: 1px solid var(--border);
 }
 .review-item.selected {
-  border-style: solid;
-  border-color: var(--accent);
+  border-left-style: solid;
+  background: var(--inferred-soft);
 }
 .review-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: baseline;
+  gap: 4px 10px;
 }
 .review-title {
+  font-family: var(--font-display);
   font-weight: 600;
-  font-size: 14px;
+  font-size: 15.5px;
+  letter-spacing: -0.015em;
 }
 .review-content {
-  margin: 6px 0 8px;
+  margin: 6px 0 10px;
+  max-width: 70ch;
+  color: var(--text-secondary);
   white-space: pre-wrap;
 }
 .review-actions {
@@ -1468,6 +1484,10 @@ table.archived td:first-child {
   gap: 8px;
 }
 .button-danger {
-  border-color: #fca5a5;
-  color: #991b1b;
+  border-color: transparent;
+  color: var(--danger);
+}
+.button-danger:hover {
+  border-color: var(--danger);
+  background: var(--danger-soft);
 }

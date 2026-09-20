@@ -12,7 +12,7 @@ import NodeDetail, { type NodeAction } from './NodeDetail';
 import NodeForm, { type FormMode } from './NodeForm';
 import NodeList from './NodeList';
 import PendingReviewList from './PendingReviewList';
-import TaskPanel from './TaskPanel';
+import TaskPanel, { type TaskSummary } from './TaskPanel';
 
 type View = 'graph' | 'list' | 'review' | 'archived';
 type Panel = { kind: 'detail' } | { kind: 'history' } | { kind: 'form'; mode: FormMode };
