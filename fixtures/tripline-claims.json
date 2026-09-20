@@ -5,7 +5,7 @@
       "key": "source.adr-001",
       "kind": "manual",
       "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-001-utc-storage-stop-zone-display.md",
-      "label": "ADR-001: store UTC, render and schedule in the stop's zone",
+      "label": "ADR-001: Store instants in UTC; render and schedule in the stop's zone",
       "excerpt": "Decision: 1. Every instant persisted by the service is a UTC ISO-8601 string of the form YYYY-MM-DDTHH:mm:ss.sssZ. 2. Each itinerary stop carries the IANA zone of the place (stop.timezone), validated on write. 3. Anything user-facing that is about a stop — displayed times, \"morning of\" computations, reminders scheduled relative to the stop — is computed in stop.timezone. The traveller's homeTimezone is for account-level display only and must not be used to derive stop-relative instants. 4. All zone math goes through src/itinerary/timezone.ts (toZoned, fromZoned, atLocalTime, formatInZone). Consequences: Reviewers should treat a homeTimezone reference outside trips/ as a smell and ask for the stop's zone instead.",
       "actorLabel": "tripline-curator"
     },
@@ -13,32 +13,32 @@
       "key": "source.adr-002",
       "kind": "manual",
       "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-002-minor-units-and-locked-fx.md",
-      "label": "ADR-002: money in minor units; FX locked at quote time",
-      "excerpt": "Decision: money is { amountMinor: integer, currency: ISO-4217 }. A quote captures fxRate and quotedAt once; bookings and displays reuse the quoted amount and never re-apply a rate. src/pricing/money.ts and src/pricing/quote.ts implement this.",
+      "label": "ADR-002: Money in minor units; FX locked at quote time",
+      "excerpt": "Decision: 1. Money is the pair { amountMinor: integer, currency } everywhere. The helpers in src/pricing/money.ts are the only arithmetic on money; adding two different currencies is a TypeError. 2. A quote converts a provider offer into the trip's currency exactly once, at quote.quotedAt, and records the rate it used as quote.fxRate together with the untouched provider price (quote.base). The converted amount is quote.total. 3. quote.total is the number the traveller is shown and the number a booking charges. Display code and booking code read total; they never call the FX source and never recompute from base. 4. Quotes expire (expiresAt, 30 minutes). Consequences: Code that touches fxRate outside pricing/quote.ts is a review flag.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.adr-003",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-003-client-booking-ref-idempotency.md",
-      "label": "ADR-003: client-generated bookingRef is the provider idempotency key",
-      "excerpt": "Decision: the client generates bookingRef before the first provider call. Every attempt, including retries in src/providers/retry.ts (max 3, jittered backoff), forwards the same bookingRef as the provider's idempotency key; adapters must treat a repeated ref as the same reservation. Never mint a new request id per attempt.",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-003-provider-retry-and-idempotency-key.md",
+      "label": "ADR-003: Provider retry and the bookingRef idempotency key",
+      "excerpt": "Decision: 1. Every provider call goes through withRetry in src/providers/retry.ts: at most 3 attempts, full-jitter exponential backoff (base 100 ms, cap 2 s), retrying only errors the provider marks retryable. 2. The request passed to the provider is identical on every attempt. 3. Every call that creates something on the provider side carries the client-generated bookingRef as the provider's idempotency key. The booking layer mints bookingRef once per booking (see src/bookings/idempotency.ts) before the first provider call and reuses it on retries. 4. Adapters treat a provider response for a repeated bookingRef as the same reservation, never as a conflict. Consequences: Generating a fresh request id inside the retry closure defeats the entire mechanism; reviewers should look for exactly that.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.adr-004",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-004-provider-search-cache.md",
-      "label": "ADR-004: provider search results cached 10 minutes, keyed by currency too",
-      "excerpt": "Decision: search responses are cached for 10 minutes in src/providers/cache.ts under (origin, destination, date, currency). Currency is part of the key because provider quotes are currency-specific and must not be reconverted.",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-004-search-cache-keyed-by-currency.md",
+      "label": "ADR-004: Search cache keyed by currency",
+      "excerpt": "Decision: 1. Priced search results (Quote[]) are cached in-process for 10 minutes (SEARCH_TTL_MS) in src/providers/cache.ts (TtlCache). 2. The cache key is built by searchCacheKey from (kind, origin, destination, date, currency) — for hotel stays the number of nights is appended. Currency is part of the key because the cached value is currency-specific. 3. The cache TTL (10 min) is shorter than the quote TTL (30 min, ADR-002), so a cached quote can always still be booked when it is served. Consequences: Dropping currency from the key to \"improve hit rate\" is a correctness bug, not an optimisation.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.adr-005",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-005-soft-delete-stops.md",
-      "label": "ADR-005: itinerary stops are soft-deleted",
-      "excerpt": "Decision: deleting a stop sets deletedAt instead of removing the row so bookings keep their history. Consequence: anything scheduled against a stop (reminders in src/notifications) must treat a stop with deletedAt as cancelled and must not fire.",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/docs/adr/ADR-005-soft-delete-stops-cancel-reminders.md",
+      "label": "ADR-005: Soft-delete stops; cancel their reminders",
+      "excerpt": "Decision: 1. Stops are soft-deleted: DELETE /api/trips/:tripId/stops/:stopId sets stops.deleted_at and keeps the row. listStops returns live stops only. 2. Deleting a stop cancels its still-scheduled reminders (cancelRemindersForStop, invoked via the itinerary route's onStopDeleted hook). Cancelled is a terminal status; the rows are kept. 3. The scheduler independently refuses to fire a reminder whose stop has deletedAt set, marking it cancelled instead. Consequences: Every query on stops that is meant to show the itinerary must filter deleted_at IS NULL. Anything else scheduled or derived from a stop in future inherits the same rule: on delete, cancel; in the worker, check deletedAt before acting.",
       "actorLabel": "tripline-curator"
     },
     {
@@ -46,31 +46,47 @@
       "kind": "manual",
       "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/blob/main/CONTRIBUTING.md",
       "label": "CONTRIBUTING.md reviewer checklist",
-      "excerpt": "Reviewer checklist: instants stored UTC and rendered in the stop's zone; money in minor units with the quoted FX; bookingRef forwarded on every provider attempt; search cache key includes currency; soft-deleted stops cancel their reminders. Trips have exactly one traveller; providers are in-process fakes with injected latency and timeouts so tests are deterministic.",
+      "excerpt": "Most of what makes it correct is not in any one file but in a handful of rules that cross module boundaries: the rule is defined in one place and bites somewhere else. — Time zones — UTC in storage, the stop's zone in the open (ADR-001). Money — integer minor units, FX locked on the quote (ADR-002). Providers — retry with backoff, and the bookingRef is the idempotency key (ADR-003). Search cache — 10 minutes, keyed by (origin, destination, date, currency) (ADR-004). Stops are soft-deleted; dependent reminders are cancelled, not fired (ADR-005). — Every module takes a Db (and where relevant a deps bag) as an argument. Fake providers only.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.pr-itinerary",
       "kind": "manual",
       "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pull/2",
-      "label": "PR #2: itinerary stops with IANA zones (ADR-001)",
-      "excerpt": "Follow-ups: Reminders/notifications will consume atLocalTime for \"morning of the stop\" nudges. Whoever picks that up: use the stop's zone, per the ADR. Soft deletion of stops is not in scope here; stops are append-only for now. — Seed adds a Tokyo and a Lisbon stop to the New York traveller's trip so the demo data spans three zones.",
+      "label": "PR #2: Itinerary stops with IANA zones (ADR-001)",
+      "excerpt": "Follow-ups: Reminders/notifications will consume atLocalTime for \"morning of the stop\" nudges. Whoever picks that up: use the stop's zone, per the ADR. — Seed adds a Tokyo and a Lisbon stop to the New York traveller's trip so the demo data spans three zones.",
       "actorLabel": "tripline-curator"
     },
     {
       "key": "source.pr-reminders",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pulls?q=is%3Apr+trip+reminders",
-      "label": "Pull request: trip reminders",
-      "excerpt": "Adds src/notifications/reminders.ts and scheduler.ts. Reminder instants are computed from the traveller's home zone for now; tests/reminders.test.ts has a skipped case for a stop in another zone with a TODO to switch to the stop's zone.",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pull/8",
+      "label": "PR #8: Trip reminders: morning-of emails per stop with a polling scheduler",
+      "excerpt": "Time zone: The 08:00 wall-clock time is computed in the traveller's home zone for now. That's correct for same-zone trips and gets the scheduler shipped; for a stop in another zone it's off by the zone difference, which ADR-001 says we should be computing in stop.timezone. I've written the Tokyo case up as a skipped test in tests/reminders.test.ts and opened #7 for the follow-up so this PR stays about the scheduler. Un-skipping it today fails with 2026-05-01T12:00Z (08:00 New York) where 2026-04-30T23:00Z (08:00 Tokyo) is expected.",
       "actorLabel": "tripline-curator"
     },
     {
-      "key": "source.pr-hotel-retry",
+      "key": "source.issue-reminders-zone",
       "kind": "manual",
-      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pulls?q=is%3Apr+provider+adapters",
-      "label": "Pull request: provider adapters, retry, cache",
-      "excerpt": "Adds flights/hotels adapters with retry and cache. Known gap: the hotel adapter builds a fresh provider request id on each retry attempt instead of forwarding bookingRef; a skipped test in tests/hotels.test.ts documents the duplicate reservation after a timeout.",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/issues/7",
+      "label": "Issue #7: compute the reminder in the stop's zone",
+      "excerpt": "Follow-up from PR #8: reminderInstantFor computes \"08:00 on the morning of the stop\" in trip.homeTimezone; per ADR-001 it must be computed in stop.timezone. Skipped reproduction: tests/reminders.test.ts \"fires at 08:00 in the stop zone for a stop in a different zone\".",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.pr-bookings",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/pull/6",
+      "label": "PR #6: Bookings with idempotency keys and the search → quote → book flow",
+      "excerpt": "src/bookings/idempotency.ts: bookingRef (bk_ + 16 chars) is minted once, before the first provider call, and is the identity of the booking from then on. Known issue: While writing the adapter tests I found that the hotel adapter builds a new supplier request id per attempt rather than forwarding bookingRef, so the commit-then-timeout case creates two rooms. Flights is correct. Filed as #5 with the failing case checked in as it.skip in tests/hotels.test.ts; fixing it is a one-liner but I'd rather land bookings and take that separately with its own review, since it's the exact scenario ADR-003 is about.",
+      "actorLabel": "tripline-curator"
+    },
+    {
+      "key": "source.issue-hotel-idempotency",
+      "kind": "manual",
+      "uri": "https://github.com/AnmolKaran/hackmit-demo-2026/issues/5",
+      "label": "Issue #5: hotel adapter does not forward bookingRef",
+      "excerpt": "From PR #6: the hotel adapter builds a new supplier request id per attempt (idempotencyKey: newId('hreq') in src/providers/hotels.ts reserve()) rather than forwarding bookingRef, so the commit-then-timeout case creates two rooms. Skipped reproduction: tests/hotels.test.ts \"reserve forwards bookingRef so a commit-then-timeout retry yields one reservation\".",
       "actorLabel": "tripline-curator"
     }
   ],
@@ -101,18 +117,18 @@
       "key": "bug.reminders-home-zone",
       "type": "bug",
       "title": "Trip reminders are scheduled in the traveller's home zone instead of the stop's zone",
-      "content": "src/notifications/reminders.ts computes the reminder instant with trip.homeTimezone. For a stop whose zone differs from the traveller's home zone the reminder fires at the wrong local time (the seed data has a New York traveller with Tokyo and Lisbon stops: a 'morning of' Tokyo reminder fires at New York morning). The fix is to derive the instant from stop.timezone with atLocalTime(stop.startsAt, stop.timezone, hour) from src/itinerary/timezone.ts, per ADR-001. tests/reminders.test.ts contains the skipped reproduction.",
-      "summary": "reminders.ts uses trip.homeTimezone; should use atLocalTime(…, stop.timezone, …) from src/itinerary/timezone.ts.",
+      "content": "reminderInstantFor in src/notifications/reminders.ts computes '08:00 on the morning of the stop' with trip.homeTimezone (const zone = trip.homeTimezone), and reminderEmail renders the start time in that zone too. For a stop whose zone differs from the traveller's, the reminder fires at the wrong local time: the seeded New York traveller's Tokyo stop gets 2026-05-01T12:00Z (08:00 New York) where 2026-04-30T23:00Z (08:00 Tokyo) is expected, and the email says 02:00 (America/New_York) for a 15:00 JST check-in. Same-zone trips are unaffected, which is why the suite stays green with the Tokyo case skipped. Fix per ADR-001: derive the instant from stop.timezone using atLocalTime/toZoned from src/itinerary/timezone.ts and format with formatInZone(stop.startsAt, stop.timezone); stop reading trip.homeTimezone. Tracked as issue #7; skipped reproduction in tests/reminders.test.ts.",
+      "summary": "reminders.ts uses trip.homeTimezone; should use stop.timezone through src/itinerary/timezone.ts (issue #7).",
       "importance": 5,
       "confidence": 1,
-      "sourceKey": "source.pr-reminders",
-      "changeReason": "Known issue recorded from the trip reminders pull request"
+      "sourceKey": "source.issue-reminders-zone",
+      "changeReason": "Known issue recorded from PR #8 and issue #7"
     },
     {
       "key": "constraint.soft-deleted-stops-cancel-reminders",
       "type": "constraint",
       "title": "A soft-deleted stop cancels everything scheduled against it",
-      "content": "Itinerary stops are never hard-deleted; deletion sets stop.deletedAt. Any scheduled work keyed to a stop — reminders in src/notifications/scheduler.ts in particular — must check deletedAt at fire time and skip (cancel) rather than send. Queries that list active stops must filter deletedAt IS NULL.",
+      "content": "Itinerary stops are never hard-deleted; DELETE sets stops.deleted_at and keeps the row. Deleting a stop cancels its still-scheduled reminders (cancelRemindersForStop via the itinerary route's onStopDeleted hook), and the scheduler in src/notifications/scheduler.ts independently refuses to fire a reminder whose stop has deletedAt set, marking it cancelled. Any query meant to show the itinerary must filter deleted_at IS NULL (listStops does). Anything scheduled or derived from a stop in future inherits the rule: on delete, cancel; in the worker, check deletedAt before acting.",
       "summary": "Check stop.deletedAt before firing; soft-deleted stops must not notify.",
       "importance": 4,
       "confidence": 1,
@@ -122,9 +138,9 @@
     {
       "key": "decision.adr-005-soft-delete-stops",
       "type": "decision",
-      "title": "ADR-005: soft-delete itinerary stops",
-      "content": "Context: bookings reference stops and travellers expect to see what they cancelled. Decision: deleting a stop sets deletedAt; rows stay. Consequence: every consumer of stops (notifications, pricing summaries) must respect deletedAt, and the scheduler treats a deleted stop as a cancelled reminder.",
-      "summary": "Stops keep their rows; consumers filter on deletedAt.",
+      "title": "ADR-005: soft-delete itinerary stops and cancel their reminders",
+      "content": "Context: bookings reference stops and travellers expect to see what they cancelled. Decision: deleting a stop sets deleted_at; rows stay; getStop hides deleted stops unless includeDeleted is passed by code following a reference. Belt and braces for reminders: the onStopDeleted hook cancels on the common path and the scheduler guarantees the invariant at fire time. Soft deletion is idempotent; there is no undelete yet. Bookings are not touched by deleting a stop — cancelling a reservation is a separate operation with money attached.",
+      "summary": "Stops keep their rows; consumers filter on deletedAt; reminders cancel twice over.",
       "importance": 3,
       "confidence": 1,
       "sourceKey": "source.adr-005",
@@ -134,8 +150,8 @@
       "key": "constraint.money-minor-units-fx-locked",
       "type": "constraint",
       "title": "Money is integer minor units with a currency; FX is locked at quote time",
-      "content": "Amounts are { amountMinor: integer, currency }. Never use floating-point currency values. A quote captures fxRate and quotedAt exactly once in src/pricing/quote.ts; bookings copy the quoted amount and displays format it. Re-applying an FX rate at booking or display time is a defect.",
-      "summary": "Integer minor units; the quote's fxRate is the only conversion.",
+      "content": "Amounts are { amountMinor: integer, currency } everywhere — database columns, service types, API bodies. The helpers in src/pricing/money.ts are the only arithmetic on money; adding two different currencies is a TypeError. A quote converts a provider offer into the trip's currency exactly once at quote.quotedAt via convertMoney with an explicit rate, recording quote.fxRate and the untouched provider price quote.base; the converted amount is quote.total. Display and booking code read total and never call the FX source or recompute from base. Quotes expire after 30 minutes (expiresAt) and are rejected at booking time rather than silently refreshed. Touching fxRate outside src/pricing/quote.ts is a review flag.",
+      "summary": "Integer minor units; quote.total is the only number shown or charged; fxRate lives in quote.ts.",
       "importance": 4,
       "confidence": 1,
       "sourceKey": "source.adr-002",
@@ -145,7 +161,7 @@
       "key": "decision.adr-002-lock-fx-at-quote",
       "type": "decision",
       "title": "ADR-002: minor units and FX locked at quote time",
-      "content": "Context: floating-point totals drifted and re-converted prices changed between search and checkout. Decision: integer minor units everywhere; a single fxRate captured on the quote. Consequence: src/pricing/money.ts is the only arithmetic helper; bookings never convert.",
+      "content": "Context: floating-point totals drift and re-converted prices change between search and checkout. Decision: integer minor units everywhere; one fxRate captured on the quote; convertMoney takes an explicit rate so a 'just convert it again' shortcut is not available by accident. Consequences: rounding happens once at quote time; the provider may be paid an amount differing from base by the rate movement — the traveller's price is honoured and the spread is ours; a display in a different currency is a new quote, not a view.",
       "summary": "Why prices are frozen on the quote.",
       "importance": 3,
       "confidence": 1,
@@ -156,8 +172,8 @@
       "key": "constraint.booking-ref-idempotency",
       "type": "constraint",
       "title": "Every provider attempt forwards the same client bookingRef as the idempotency key",
-      "content": "The client generates bookingRef before the first provider call. src/providers/retry.ts retries failed or timed-out calls up to 3 times with jittered backoff and must pass the identical bookingRef on each attempt; adapters send it as the provider idempotency key and treat a repeated ref as the same reservation. Minting a new request id per attempt can create duplicate reservations after a timeout.",
-      "summary": "Retries reuse bookingRef; adapters must not generate per-attempt ids.",
+      "content": "src/bookings/idempotency.ts mints bookingRef (bk_ + 16 chars) once, before the first provider call; it is the identity of the booking from then on and bookings.booking_ref is UNIQUE. Every provider call goes through withRetry in src/providers/retry.ts (at most 3 attempts, full-jitter backoff, retryable errors only) and the request must be identical on every attempt. Every call that creates something provider-side — hotel and flight reservations — passes bookingRef as the provider's idempotencyKey; adapters treat a response for a repeated bookingRef as the same reservation, never a conflict. Generating a fresh request id inside the retry closure (e.g. newId(...) per attempt) defeats the mechanism and creates duplicate reservations after a commit-then-timeout.",
+      "summary": "Retries reuse bookingRef as idempotencyKey; adapters must not generate per-attempt ids.",
       "importance": 5,
       "confidence": 1,
       "sourceKey": "source.adr-003",
@@ -167,7 +183,7 @@
       "key": "decision.adr-003-client-booking-ref",
       "type": "decision",
       "title": "ADR-003: client-generated bookingRef as provider idempotency key",
-      "content": "Context: provider timeouts are common with the fake providers' injected latency and would be with real ones. Decision: idempotency is owned by the caller, not the adapter, so retries are safe by construction. Consequence: src/bookings/idempotency.ts generates and persists the ref; adapters forward it unchanged.",
+      "content": "Context: provider timeouts are common with the fakes' injected latency (failNext('timeout-after-commit')) and would be with real providers. Decision: idempotency is owned by the caller, not the adapter, so retries and client re-submissions are safe by construction; withRetry only retries errors the provider marks retryable; rate limiting (src/providers/rateLimit.ts) sits in front of the retry loop. Consequence: anyone writing a new adapter must thread bookingRef through to the provider's idempotency/request key.",
       "summary": "Why idempotency lives with the caller.",
       "importance": 3,
       "confidence": 1,
@@ -178,19 +194,19 @@
       "key": "bug.hotel-retry-duplicate-reservation",
       "type": "bug",
       "title": "Hotel adapter mints a new request id per retry, duplicating reservations after a timeout",
-      "content": "src/providers/hotels.ts builds a fresh provider request id inside each attempt instead of forwarding the caller's bookingRef. When the first attempt times out but succeeds provider-side, the retry creates a second reservation. tests/hotels.test.ts holds the skipped reproduction. The fix is to pass bookingRef through unchanged as the idempotency key, matching src/providers/flights.ts.",
-      "summary": "hotels.ts ignores bookingRef on retries; should forward it like flights.ts.",
+      "content": "reserve() in src/providers/hotels.ts passes idempotencyKey: newId('hreq') to the provider inside the retry closure instead of forwarding the caller's req.bookingRef. When the first attempt commits provider-side but times out, the retry carries a different key and the fake creates a second room. src/providers/flights.ts is correct and forwards bookingRef. The fix is the one-liner idempotencyKey: req.bookingRef. Tracked as issue #5; skipped reproduction in tests/hotels.test.ts.",
+      "summary": "hotels.ts uses newId('hreq') per attempt; should forward req.bookingRef like flights.ts (issue #5).",
       "importance": 4,
       "confidence": 1,
-      "sourceKey": "source.pr-hotel-retry",
-      "changeReason": "Known issue recorded from the provider adapters pull request"
+      "sourceKey": "source.issue-hotel-idempotency",
+      "changeReason": "Known issue recorded from PR #6 and issue #5"
     },
     {
       "key": "constraint.provider-cache-key-includes-currency",
       "type": "constraint",
       "title": "Provider search cache is keyed by origin, destination, date, and currency for 10 minutes",
-      "content": "src/providers/cache.ts caches search results for 10 minutes under (origin, destination, date, currency). Currency is part of the key because provider quotes are currency-specific and must not be reconverted (see the money constraint). Omitting currency from the key serves one traveller another traveller's currency.",
-      "summary": "Cache key must include currency; TTL 10 minutes.",
+      "content": "Priced search results (Quote[]) are cached in-process for 10 minutes (SEARCH_TTL_MS) in src/providers/cache.ts (TtlCache). searchCacheKey builds the key from (kind, origin, destination, date, currency), plus nights for hotel stays; origin and destination are normalised (trimmed, upper-cased). Currency is part of the key because the cached value is currency-specific; dropping it to improve hit rate is a correctness bug (pinned by tests/cache.test.ts). Anyone adding a pricing dimension (cabin class, refundable fares) must add it to the key. The 10-minute TTL is shorter than the 30-minute quote TTL so a cached quote can always still be booked.",
+      "summary": "Cache key must include currency; TTL 10 minutes < quote TTL 30 minutes.",
       "importance": 3,
       "confidence": 1,
       "sourceKey": "source.adr-004",
@@ -200,7 +216,7 @@
       "key": "decision.adr-004-cache-provider-search",
       "type": "decision",
       "title": "ADR-004: cache provider search results",
-      "content": "Context: repeated searches hit provider rate limits. Decision: a 10-minute in-memory cache in src/providers/cache.ts keyed by route, date, and currency; rateLimit.ts stays as the backstop. Consequence: quote.ts reads through the cache and must pass the traveller's currency.",
+      "content": "Context: repeated searches hit provider rate limits. Decision: a 10-minute per-process TtlCache in src/providers/cache.ts keyed by kind, route, date, and currency; rateLimit.ts stays as the backstop. Consequence: repeated searches within ten minutes do not hit the provider and return byte-identical quotes (same ids), so 'book the second result' is stable across refreshes; the cache is not shared across processes.",
       "summary": "Why search goes through a currency-aware cache.",
       "importance": 2,
       "confidence": 1,
@@ -211,7 +227,7 @@
       "key": "assumption.single-traveller-per-trip",
       "type": "assumption",
       "title": "A trip has exactly one traveller",
-      "content": "Trips carry one traveller with one home zone and one currency; group trips are out of scope. Code that needs 'the traveller' can read it from the trip without ambiguity.",
+      "content": "Trips carry one traveller with one home zone (trip.homeTimezone) and one currency; group trips are out of scope. Code that needs 'the traveller' can read it from the trip without ambiguity, and the home zone is meaningful only for the account-level 'your trips' view.",
       "summary": "No group trips; trip.traveller is singular.",
       "importance": 2,
       "confidence": 0.9,
@@ -222,8 +238,8 @@
       "key": "assumption.fake-providers-deterministic",
       "type": "assumption",
       "title": "Providers are in-process fakes with injected latency and timeouts",
-      "content": "src/providers/fake/* implement the flight and hotel provider interfaces without network access. Latency and timeouts are injected per call so retry and idempotency behaviour is deterministic under test. No provider credentials exist anywhere in the project.",
-      "summary": "No network; timeouts are simulated.",
+      "content": "src/providers/fake/* implement the flight and hotel provider interfaces without network access. Both fakes honour idempotencyKey (a repeated key returns the existing reservation) and can be told failNext('timeout-after-commit'), which is the case that produces duplicates when the key is missing. No provider credentials exist anywhere in the project.",
+      "summary": "No network; timeouts are simulated with failNext.",
       "importance": 2,
       "confidence": 1,
       "sourceKey": "source.contributing",
@@ -233,7 +249,7 @@
       "key": "discovery.zone-cannot-be-derived-from-city",
       "type": "discovery",
       "title": "Each stop stores its own validated IANA zone; the traveller's zone is account-level only",
-      "content": "stop.timezone is written and validated (isValidTimeZone/assertTimeZone) when the stop is created, and stop responses include a display block already rendered in that zone so clients never convert. Consumers must read the stored zone rather than infer one from the destination or from trip.homeTimezone, which exists only for the account-level 'your trips' view.",
+      "content": "stop.timezone is written and validated (isValidTimeZone/assertTimeZone) when the stop is created, and stop responses include a display block already rendered in that zone so clients never convert. Consumers must read the stored zone rather than infer one from the destination or from trip.homeTimezone, which exists only for the account-level 'your trips' view. The seed spans three zones: a New York traveller with Tokyo and Lisbon stops.",
       "summary": "Read stop.timezone; never infer a zone from the destination or the traveller.",
       "importance": 3,
       "confidence": 0.95,
@@ -244,12 +260,12 @@
       "key": "discovery.scheduler-compares-utc-instants",
       "type": "discovery",
       "title": "The scheduler tick compares UTC instants; zone only matters when choosing the wall-clock target",
-      "content": "src/notifications/scheduler.ts polls due reminders by comparing stored UTC instants with now(). Zone handling therefore belongs where the target instant is computed (reminders.ts), not in the scheduler loop.",
-      "summary": "Fix zone bugs where the instant is computed, not in the scheduler.",
+      "content": "src/notifications/scheduler.ts polls due reminders by comparing stored UTC fireAt instants with now(), and checks the stop's deletedAt before sending. Zone handling therefore belongs where the target instant is computed (reminderInstantFor in reminders.ts), not in the scheduler loop.",
+      "summary": "Fix zone bugs in reminderInstantFor, not in the scheduler.",
       "importance": 3,
       "confidence": 0.9,
       "sourceKey": "source.pr-reminders",
-      "changeReason": "Recorded from the trip reminders pull request"
+      "changeReason": "Recorded from PR #8"
     }
   ],
   "edges": [
@@ -305,31 +321,31 @@
       "fromKey": "discovery.zone-cannot-be-derived-from-city",
       "toKey": "constraint.utc-storage-stop-zone-display",
       "type": "RELATED_TO",
-      "sourceKey": "source.adr-001"
+      "sourceKey": "source.pr-itinerary"
     },
     {
       "fromKey": "discovery.zone-cannot-be-derived-from-city",
       "toKey": "component.src-itinerary",
       "type": "AFFECTS",
-      "sourceKey": "source.adr-001"
+      "sourceKey": "source.pr-itinerary"
     },
     {
       "fromKey": "bug.reminders-home-zone",
       "toKey": "file.src-notifications-reminders-ts",
       "type": "AFFECTS",
-      "sourceKey": "source.pr-reminders"
+      "sourceKey": "source.issue-reminders-zone"
     },
     {
       "fromKey": "bug.reminders-home-zone",
       "toKey": "component.src-notifications",
       "type": "AFFECTS",
-      "sourceKey": "source.pr-reminders"
+      "sourceKey": "source.issue-reminders-zone"
     },
     {
       "fromKey": "bug.reminders-home-zone",
       "toKey": "constraint.utc-storage-stop-zone-display",
       "type": "RELATED_TO",
-      "sourceKey": "source.pr-reminders"
+      "sourceKey": "source.issue-reminders-zone"
     },
     {
       "fromKey": "discovery.scheduler-compares-utc-instants",
@@ -383,7 +399,7 @@
       "fromKey": "component.src-bookings",
       "toKey": "component.src-pricing",
       "type": "DEPENDS_ON",
-      "sourceKey": "source.adr-002"
+      "sourceKey": "source.pr-bookings"
     },
     {
       "fromKey": "file.src-bookings-idempotency-ts",
@@ -413,43 +429,43 @@
       "fromKey": "component.src-bookings",
       "toKey": "component.src-providers",
       "type": "DEPENDS_ON",
-      "sourceKey": "source.adr-003"
+      "sourceKey": "source.pr-bookings"
     },
     {
       "fromKey": "file.src-providers-hotels-ts",
       "toKey": "component.src-providers",
       "type": "IMPLEMENTS",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.pr-bookings"
     },
     {
       "fromKey": "file.src-providers-flights-ts",
       "toKey": "component.src-providers",
       "type": "IMPLEMENTS",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.pr-bookings"
     },
     {
       "fromKey": "file.src-providers-hotels-ts",
       "toKey": "file.src-providers-retry-ts",
       "type": "DEPENDS_ON",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.pr-bookings"
     },
     {
       "fromKey": "bug.hotel-retry-duplicate-reservation",
       "toKey": "file.src-providers-hotels-ts",
       "type": "AFFECTS",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.issue-hotel-idempotency"
     },
     {
       "fromKey": "bug.hotel-retry-duplicate-reservation",
       "toKey": "component.src-bookings",
       "type": "AFFECTS",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.issue-hotel-idempotency"
     },
     {
       "fromKey": "bug.hotel-retry-duplicate-reservation",
       "toKey": "constraint.booking-ref-idempotency",
       "type": "RELATED_TO",
-      "sourceKey": "source.pr-hotel-retry"
+      "sourceKey": "source.issue-hotel-idempotency"
     },
     {
       "fromKey": "file.src-providers-cache-ts",

@@ -50,7 +50,8 @@ export const TRIPLINE_LAYOUT = [
 /** Task sentences from the demo spec §5.1 (primary) and its backup. */
 export const TRIPLINE_PRIMARY_TASK =
   'Trip reminders fire at the wrong local time for stops in another time zone';
-export const TRIPLINE_BACKUP_TASK = 'Hotel bookings are duplicated when the provider times out';
+export const TRIPLINE_BACKUP_TASK =
+  'Fix the hotel adapter creating duplicate reservations on retry after a provider timeout';
 
 /** Spec §14 A3: what the primary task must select and must not. */
 export const PRIMARY_EXPECTED_KEYS = [

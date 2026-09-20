@@ -89,9 +89,12 @@ database with `OPERATOR_LABEL` set.
    one (or edit the constraint to mention reminders) → `hof log` / `hof diff` shows
    v1 → v2 with operator provenance → `hof checkout` again cites v2.
 
-Backup task (if beat 4 misbehaves): "Hotel bookings are duplicated when the
-provider times out" — idempotency rule lives in `providers/`, edit is in
-`bookings/`.
+Backup task (if beat 4 misbehaves): "Fix the hotel adapter creating duplicate
+reservations on retry after a provider timeout" — the rule (ADR-003) is
+defined by `bookings/idempotency.ts` and `providers/retry.ts`; the one-line
+edit is in `providers/hotels.ts`. Avoid the word "bookings" in the sentence:
+it becomes an explicit reference to the Bookings component and drags the
+pricing neighbourhood in ahead of the adapter.
 
 ### 5.2 Operator rebuild flow
 
@@ -389,15 +392,18 @@ T3's rule table are fixed, since the fixture keys derive from the paths):
 This repository:
 
 - [x] D1: write `fixtures/tripline-claims.json` against the T2 layout.
-- [ ] D1b: once the repository exists, replace paraphrased excerpts with verbatim
-      ADR/PR quotes and search URLs with real PR URLs; re-run the tests.
+- [x] D1b: excerpts now quote the real ADRs, PR #2/#6/#8 bodies, and issues
+      #5/#7 verbatim; claim contents use the repository's actual names
+      (`reminderInstantFor`, `atLocalTime`, `withRetry`, `newId('hreq')`,
+      `cancelRemindersForStop`, `searchCacheKey`, `quote.total/base/fxRate`).
 - [x] D2: `overlay.ts`, `scripts/demo-tripline.ts`, npm script, unit tests.
 - [x] D3: confirmed the existing `hof checkout` stderr line suffices; no change.
 - [x] Integration test (stand-in layout, real local provider); A3/A4 pass. One
       fixture adjustment was needed: `hotels.ts`/`flights.ts IMPLEMENTS
       component.src-providers` and `hotels.ts DEPENDS_ON retry.ts` so the backup
       task reaches the adapter by graph path (graph adjusted, compiler untouched).
-- [ ] Re-run the integration test with `TRIPLINE_PATH` set to the real clone.
+- [x] Re-run the integration test with `TRIPLINE_PATH` set to the real clone
+      (commit `ba6c416`): all four cases pass.
 - [ ] D4: README demo section.
 - [ ] Rehearse A5 with both agents; choose primary/backup task; record results.
 - [ ] Rehearse A6 with a live key and the `hof edit` fallback.
@@ -473,7 +479,23 @@ Learned while implementing the pipeline against the layout stand-in (2026-09-20)
   (which `CONSTRAINS` bookings) ranks second above the hotel bug. Worth noting
   in the compiler spec if it recurs on the real repository.
 
-To be filled after the repository exists and rehearsal:
+Measured on the real repository (`ba6c416`, 2026-09-20, local provider):
+
+- Scan: 13 components, 58 files (9 skipped); with the overlay 89 nodes, all
+  canonical. Project total ≈ 9.3–9.8k tokens (varies slightly with the task
+  because the rendered header includes it).
+- Primary task at 2,048: 1,989 tokens, 10 nodes — bug, ADR-001, zone
+  constraint, both discoveries, soft-delete constraint, `timezone.ts`,
+  `reminders.ts`, Notifications, `scheduler.ts`; only `itinerary` omitted for
+  budget. Ratio 4.7×, selection 11 % of nodes.
+- Backup task at 2,048: 1,995 tokens, 11 nodes led by the idempotency constraint
+  and the hotel bug; the real `ADR-003` file node is selected by semantic match
+  because the scanner records its Markdown heading.
+- The repository built by the other agent filed the planted bugs as real issues
+  (#5 hotel idempotency, #7 reminder zone) and left PR #10 (the fix) open, so
+  beat 5 has a genuine PR to ingest.
+
+To be filled after rehearsal:
 
 - Tripline repository: https://github.com/AnmolKaran/hackmit-demo-2026 (name differs from the working title). Commit hash used for the demo: TBD.
 - The repository copies `demo-tripline.md` at its root; it will be scanned as a documentation file and should be removed (or excluded) before the demo so the demo project does not describe its own demo.
